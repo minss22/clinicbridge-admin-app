@@ -81,10 +81,12 @@ function AdminShell({ session }: { session: Session | null }) {
           {session && <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, padding: '6px 10px', fontSize: 12 }}>로그아웃</button>}
         </div>
       </aside>
-      <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', maxWidth: 900 }}>
-        {view === 'reservations' && <ReservationsView />}
-        {view === 'branches' && <BranchesView />}
-        {view === 'customers' && <CustomersView />}
+      <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          {view === 'reservations' && <ReservationsView />}
+          {view === 'branches' && <BranchesView />}
+          {view === 'customers' && <CustomersView />}
+        </div>
       </main>
     </div>
   )
@@ -505,6 +507,29 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
     setBusy(true)
     try { await adminApi.deleteBranch(b.branchId); onSaved() } catch (e: any) { alert(e?.message || '삭제 실패') } finally { setBusy(false) }
   }
+  const [holBusy, setHolBusy] = useState(false)
+  const fillKoreanHolidays = async () => {
+    const yr = new Date().getFullYear()
+    setHolBusy(true)
+    try {
+      const dates: string[] = []
+      for (const y of [yr, yr + 1]) {
+        const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/KR`)
+        if (!res.ok) continue
+        const data = await res.json()
+        for (const h of data) if (h?.date) dates.push(h.date)  // 'YYYY-MM-DD' (대체공휴일 포함)
+      }
+      if (!dates.length) { alert('공휴일을 불러오지 못했습니다'); return }
+      const existing = holidayText.split(',').map(s => s.trim()).filter(Boolean)
+      const merged = Array.from(new Set([...existing, ...dates])).sort()
+      setHolidayText(merged.join(', '))
+    } catch {
+      alert('공휴일을 불러오지 못했습니다 (네트워크 오류)')
+    } finally {
+      setHolBusy(false)
+    }
+  }
+
   const dayRow = (key: 'closedDays' | 'noLunchDays') => (
     <div style={{ display: 'flex', gap: 6 }}>
       {WEEKDAYS.map((w, d) => {
@@ -537,7 +562,11 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
 
       <Lbl>휴무 요일</Lbl>{dayRow('closedDays')}
       <Lbl>점심 없는 요일</Lbl>{dayRow('noLunchDays')}
-      <Lbl>공휴일 (쉼표 구분, YYYY-MM-DD)</Lbl><Txt value={holidayText} onChange={setHolidayText} placeholder="2026-01-01, 2026-12-25" />
+      <Lbl>공휴일 (쉼표 구분, YYYY-MM-DD)</Lbl>
+      <Txt value={holidayText} onChange={setHolidayText} placeholder="2026-01-01, 2026-12-25" />
+      <button disabled={holBusy} onClick={fillKoreanHolidays} style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, border: '1px dashed #1D9E75', background: '#F0FDF8', color: '#1D9E75', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+        {holBusy ? '불러오는 중…' : '🇰🇷 한국 공휴일 자동 채우기 (올해+내년, 대체공휴일 포함)'}
+      </button>
       <Lbl>매니저 LINE ID (알림 수신)</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
       <Lbl>채널 액세스 토큰 (병원별 푸시)</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
 
