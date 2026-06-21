@@ -465,7 +465,7 @@ function BranchDetail({ b, onBack, onEdit }: { b: AdminBranch; onBack: () => voi
         <Row k="점심시간" v={b.lunchStart ? `${b.lunchStart} ~ ${b.lunchEnd || '-'}` : '없음'} />
         <Row k="휴무 요일" v={days(b.closedDays)} />
         <Row k="점심 없는 요일" v={days(b.noLunchDays)} />
-        <Row k="공휴일" v={b.holidayDates.length ? b.holidayDates.join(', ') : '없음'} />
+        <Row k="추가 휴무일" v={b.holidayDates.length ? b.holidayDates.join(', ') : '없음 (한국 공휴일 자동 적용)'} />
       </div>
 
       <div style={cardStyle}>
@@ -507,29 +507,6 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
     setBusy(true)
     try { await adminApi.deleteBranch(b.branchId); onSaved() } catch (e: any) { alert(e?.message || '삭제 실패') } finally { setBusy(false) }
   }
-  const [holBusy, setHolBusy] = useState(false)
-  const fillKoreanHolidays = async () => {
-    const yr = new Date().getFullYear()
-    setHolBusy(true)
-    try {
-      const dates: string[] = []
-      for (const y of [yr, yr + 1]) {
-        const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/KR`)
-        if (!res.ok) continue
-        const data = await res.json()
-        for (const h of data) if (h?.date) dates.push(h.date)  // 'YYYY-MM-DD' (대체공휴일 포함)
-      }
-      if (!dates.length) { alert('공휴일을 불러오지 못했습니다'); return }
-      const existing = holidayText.split(',').map(s => s.trim()).filter(Boolean)
-      const merged = Array.from(new Set([...existing, ...dates])).sort()
-      setHolidayText(merged.join(', '))
-    } catch {
-      alert('공휴일을 불러오지 못했습니다 (네트워크 오류)')
-    } finally {
-      setHolBusy(false)
-    }
-  }
-
   const dayRow = (key: 'closedDays' | 'noLunchDays') => (
     <div style={{ display: 'flex', gap: 6 }}>
       {WEEKDAYS.map((w, d) => {
@@ -562,11 +539,9 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
 
       <Lbl>휴무 요일</Lbl>{dayRow('closedDays')}
       <Lbl>점심 없는 요일</Lbl>{dayRow('noLunchDays')}
-      <Lbl>공휴일 (쉼표 구분, YYYY-MM-DD)</Lbl>
-      <Txt value={holidayText} onChange={setHolidayText} placeholder="2026-01-01, 2026-12-25" />
-      <button disabled={holBusy} onClick={fillKoreanHolidays} style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, border: '1px dashed #1D9E75', background: '#F0FDF8', color: '#1D9E75', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-        {holBusy ? '불러오는 중…' : '🇰🇷 한국 공휴일 자동 채우기 (올해+내년, 대체공휴일 포함)'}
-      </button>
+      <Lbl>병원별 추가 휴무일 (쉼표 구분, YYYY-MM-DD)</Lbl>
+      <Txt value={holidayText} onChange={setHolidayText} placeholder="2026-05-10, 2026-08-20" />
+      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 4 }}>※ 한국 공휴일(대체공휴일 포함)은 자동으로 휴무 처리됩니다. 여기엔 병원 사정으로 쉬는 날만 추가하세요.</div>
       <Lbl>매니저 LINE ID (알림 수신)</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
       <Lbl>채널 액세스 토큰 (병원별 푸시)</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
 
