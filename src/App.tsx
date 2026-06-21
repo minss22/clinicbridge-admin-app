@@ -357,7 +357,7 @@ function BookingCard({ b, busy, act, reload }: { b: Booking; busy: string | null
       {/* 고객 시간변경 요청 → 병원 확정/거절 + 다른 시간 제안 */}
       {isReschedulePending(b) && (
         <>
-          <ActionRow label={`🔁 시간변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}`} accent="#92400E" reservationId={b.booker.id} busy={busy} act={act} />
+          <ActionRow label={`🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}`} accent="#92400E" reservationId={b.booker.id} busy={busy} act={act} />
           {proposePanel}
         </>
       )}
