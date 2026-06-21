@@ -19,6 +19,8 @@ const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
 
 // 개발용: true면 로그인 없이 바로 대시보드 (백엔드 ADMIN_AUTH_DISABLED와 함께 사용)
 const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
+// 예약 앱(LIFF) URL 생성용 — 비밀 아님
+const LIFF_ID = (import.meta.env.VITE_LIFF_ID as string) || '2010411582-Duzo9BLZ'
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -65,25 +67,25 @@ function AdminShell({ session }: { session: Session | null }) {
   )
 
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto', padding: '0 16px 60px' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '14px 0', position: 'sticky', top: 0, background: '#fff', borderBottom: '1px solid #EEE', zIndex: 20 }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {NAV.map(n => (
-            <button key={n.key} onClick={() => setView(n.key)} style={{
-              padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700,
-              background: view === n.key ? '#111' : 'transparent', color: view === n.key ? '#fff' : '#888',
-            }}>{n.label}</button>
-          ))}
+    <div style={{ display: 'flex', minHeight: '100dvh', fontFamily: 'system-ui, sans-serif' }}>
+      <aside style={{ width: 180, flexShrink: 0, borderRight: '1px solid #EEE', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 0, height: '100dvh', boxSizing: 'border-box' }}>
+        <div style={{ fontSize: 16, fontWeight: 800, padding: '4px 10px 16px' }}>관리자</div>
+        {NAV.map(n => (
+          <button key={n.key} onClick={() => setView(n.key)} style={{
+            textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+            background: view === n.key ? '#111' : 'transparent', color: view === n.key ? '#fff' : '#555',
+          }}>{n.label}</button>
+        ))}
+        <div style={{ marginTop: 'auto', fontSize: 11.5, color: '#aaa', padding: '0 10px' }}>
+          <div style={{ wordBreak: 'break-all', marginBottom: 8 }}>{session?.user.email ?? '개발 모드'}</div>
+          {session && <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, padding: '6px 10px', fontSize: 12 }}>로그아웃</button>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, color: '#aaa' }}>{session?.user.email ?? '개발 모드'}</span>
-          {session && <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, padding: '6px 12px', fontSize: 12.5 }}>로그아웃</button>}
-        </div>
-      </header>
-
-      {view === 'reservations' && <ReservationsView />}
-      {view === 'branches' && <BranchesView />}
-      {view === 'customers' && <CustomersView />}
+      </aside>
+      <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', maxWidth: 900 }}>
+        {view === 'reservations' && <ReservationsView />}
+        {view === 'branches' && <BranchesView />}
+        {view === 'customers' && <CustomersView />}
+      </main>
     </div>
   )
 }
@@ -392,12 +394,15 @@ function Txt({ value, onChange, disabled, placeholder, type }: { value: string; 
 function BranchesView() {
   const [list, setList] = useState<AdminBranch[]>([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<{ b: AdminBranch; isNew: boolean } | null>(null)
+  const [selected, setSelected] = useState<AdminBranch | null>(null)        // 상세(보기)
+  const [editing, setEditing] = useState<{ b: AdminBranch; isNew: boolean } | null>(null)  // 수정/생성
 
   const load = () => { setLoading(true); adminApi.getAdminBranches().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }
   useEffect(() => { load() }, [])
 
-  if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />
+  if (editing) return <BranchForm init={editing.b} isNew={editing.isNew}
+    onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setSelected(null); load() }} />
+  if (selected) return <BranchDetail b={selected} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} />
   if (loading) return <Center small>불러오는 중…</Center>
   return (
     <div>
@@ -407,13 +412,74 @@ function BranchesView() {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {list.map(b => (
-          <button key={b.branchId} onClick={() => setEditing({ b, isNew: false })} style={listRow}>
+          <button key={b.branchId} onClick={() => setSelected(b)} style={listRow}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{b.name} <span style={{ color: '#aaa', fontSize: 12, fontWeight: 400 }}>{b.nameJa}</span></div>
             <div style={{ fontSize: 12.5, color: '#888', marginTop: 3 }}>ID {b.branchId} · 영업 {b.openTime || '-'}~{b.closeTime || '-'} · 점심 {b.lunchStart || '-'}~{b.lunchEnd || '-'}</div>
           </button>
         ))}
         {list.length === 0 && <p style={{ color: '#999', fontSize: 14 }}>병원이 없습니다.</p>}
       </div>
+    </div>
+  )
+}
+
+function BranchDetail({ b, onBack, onEdit }: { b: AdminBranch; onBack: () => void; onEdit: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const url = `https://liff.line.me/${LIFF_ID}?branch=${b.branchId}`
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) }
+    catch { prompt('URL 복사', url) }
+  }
+  const days = (arr: number[]) => (arr.length ? arr.map(d => WEEKDAYS[d]).join(', ') : '없음')
+  return (
+    <div style={{ margin: '16px 0' }}>
+      <button onClick={onBack} style={ghostBtn}>← 목록</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '10px 0 16px' }}>
+        <div>
+          <h2 style={{ fontSize: 20, margin: 0 }}>{b.name}</h2>
+          <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{b.nameJa}</div>
+        </div>
+        <button onClick={onEdit} style={primaryBtn}>수정</button>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={sectionTitle}>📱 예약 앱 URL</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input readOnly value={url} onFocus={e => e.currentTarget.select()} style={{ ...inputStyle, flex: 1, color: '#555' }} />
+          <button onClick={copy} style={{ ...primaryBtn, whiteSpace: 'nowrap', background: copied ? '#888' : '#1D9E75' }}>{copied ? '복사됨 ✓' : '복사'}</button>
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={sectionTitle}>기본 정보</div>
+        <Row k="병원 ID" v={b.branchId} />
+        <Row k="주소 (한국어)" v={b.address} />
+        <Row k="주소 (일본어)" v={b.addressJa} />
+      </div>
+
+      <div style={cardStyle}>
+        <div style={sectionTitle}>영업 / 휴무</div>
+        <Row k="영업시간" v={`${b.openTime || '-'} ~ ${b.closeTime || '-'}`} />
+        <Row k="점심시간" v={b.lunchStart ? `${b.lunchStart} ~ ${b.lunchEnd || '-'}` : '없음'} />
+        <Row k="휴무 요일" v={days(b.closedDays)} />
+        <Row k="점심 없는 요일" v={days(b.noLunchDays)} />
+        <Row k="공휴일" v={b.holidayDates.length ? b.holidayDates.join(', ') : '없음'} />
+      </div>
+
+      <div style={cardStyle}>
+        <div style={sectionTitle}>알림 설정</div>
+        <Row k="매니저 LINE ID" v={b.lineNotifyId || '미설정'} />
+        <Row k="채널 토큰" v={b.channelAccessToken ? '설정됨' : '전역 토큰 사용'} />
+      </div>
+    </div>
+  )
+}
+
+function Row({ k, v }: { k: string; v?: string | null }) {
+  return (
+    <div style={{ display: 'flex', padding: '7px 0', fontSize: 13.5, borderBottom: '1px solid #F5F5F5' }}>
+      <span style={{ width: 120, color: '#999', flexShrink: 0 }}>{k}</span>
+      <span style={{ color: '#222', wordBreak: 'break-all' }}>{v || '-'}</span>
     </div>
   )
 }
@@ -549,3 +615,5 @@ const logoutBtn: React.CSSProperties = { padding: '10px 18px', borderRadius: 8, 
 const primaryBtn: React.CSSProperties = { padding: '8px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }
 const ghostBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', padding: 0 }
 const listRow: React.CSSProperties = { textAlign: 'left', width: '100%', background: '#fff', border: '1px solid #EEE', borderRadius: 12, padding: '14px 16px', cursor: 'pointer' }
+const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid #EEE', borderRadius: 12, padding: '14px 16px', marginBottom: 12 }
+const sectionTitle: React.CSSProperties = { fontSize: 12.5, fontWeight: 700, color: '#999', marginBottom: 8 }
