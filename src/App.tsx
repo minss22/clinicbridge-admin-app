@@ -392,7 +392,7 @@ function PersonDetail({ label, p, showStatus, displayStatus }: { label: string; 
       : { color: '#9333EA', background: '#FAF5FF', borderColor: '#E9D5FF' }),  // 재진
   }
   return (
-    <div style={{ border: '1px solid #EFEFEF', borderLeft: `5px solid ${sc.fg}`, borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ border: '1px solid #EFEFEF', borderLeft: `5px solid ${sc.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* 1줄: 이름 · 생년월일 · 성별  +  상태 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>
