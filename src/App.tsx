@@ -354,7 +354,7 @@ function ReservationsView() {
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               padding: '8px 14px', borderRadius: 999,
               border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
-              background: active ? c.bg : '#fff', color: c.fg,
+              background: active ? c.bg : 'transparent', color: active ? c.fg : '#333',
               fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
             }}>
               {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
