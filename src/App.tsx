@@ -232,29 +232,45 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 
 function PersonDetail({ label, p, showStatus }: { label: string; p: Person; showStatus?: boolean }) {
   const [more, setMore] = useState(false)
-  const moreBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#1D9E75', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '4px 0 0', alignSelf: 'flex-start' }
+  const moreBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#1D9E75', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, flexShrink: 0, whiteSpace: 'nowrap' }
+  const isFirst = p.visitType === 'first'
+  const visitPill: React.CSSProperties = {
+    fontSize: 11.5, fontWeight: 700, padding: '2px 11px', borderRadius: 999, border: '1px solid', flexShrink: 0,
+    ...(isFirst
+      ? { color: '#1D4ED8', background: '#EFF6FF', borderColor: '#BFDBFE' }    // 초진
+      : { color: '#9333EA', background: '#FAF5FF', borderColor: '#E9D5FF' }),  // 재진
+  }
   return (
-    <div style={{ border: '1px solid #EFEFEF', borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column' }}>
-      {/* 필수 정보 + 희망시술 한 줄 + 상태 */}
+    <div style={{ border: '1px solid #EFEFEF', borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* 1줄: 이름 · 생년월일 · 성별  +  상태 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>
           <span style={{ fontSize: 11, color: '#777', background: '#EEE', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>{label}</span>
           <b style={{ fontSize: 14, color: '#111' }}>{p.nameKo || p.name}</b>
           {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}
-          {' · '}{p.birthDate || '-'}{' · '}{genderKo(p.gender)}{' · '}{visitKo(p.visitType)}
-          {'　'}<span style={kStyle}>희망시술</span>{p.treatmentRequest || '-'}
+          {' · '}{p.birthDate || '-'}{' · '}{genderKo(p.gender)}
         </div>
         {showStatus && <StatusBadge status={p.status} />}
       </div>
 
-      {/* 희망예산 · 시술이력 (더보기) */}
+      {/* 2줄: 초진/재진(동그라미) + 희망시술  +  더보기(오른쪽 끝) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+          <span style={visitPill}>{visitKo(p.visitType)}</span>
+          <span style={{ fontSize: 13, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={kStyle}>희망시술</span>{p.treatmentRequest || '-'}
+          </span>
+        </div>
+        <button onClick={() => setMore(v => !v)} style={moreBtn}>{more ? '접기 ▴' : '더보기 ▾'}</button>
+      </div>
+
+      {/* 더보기: 희망예산 · 시술이력 */}
       {more && (
-        <>
-          <div style={{ fontSize: 13, color: '#333', marginTop: 5 }}><span style={kStyle}>희망예산</span>{p.budget || '-'}</div>
-          <div style={{ fontSize: 13, color: '#333', marginTop: 3 }}><span style={kStyle}>시술이력</span>{p.surgeryHistory || '-'}</div>
-        </>
+        <div style={{ borderTop: '1px dashed #EEE', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ fontSize: 13, color: '#333' }}><span style={kStyle}>희망예산</span>{p.budget || '-'}</div>
+          <div style={{ fontSize: 13, color: '#333' }}><span style={kStyle}>시술이력</span>{p.surgeryHistory || '-'}</div>
+        </div>
       )}
-      <button onClick={() => setMore(v => !v)} style={moreBtn}>{more ? '접기 ▴' : '더보기 ▾'}</button>
     </div>
   )
 }
@@ -338,12 +354,9 @@ function BookingCard({ b, busy, act, reload }: { b: Booking; busy: string | null
 
   return (
     <div style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 14, padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444' }}>{b.branchName} · {dot(b.date)} {b.time}</div>
-        <StatusBadge status={b.booker.status} />
-      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444', marginBottom: 4 }}>{b.branchName} · {dot(b.date)} {b.time}</div>
 
-      <PersonDetail label="예약자" p={b.booker} />
+      <PersonDetail label="예약자" p={b.booker} showStatus />
       {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus />)}
 
       {/* 병원이 제안함 — 고객 응답 대기 */}
