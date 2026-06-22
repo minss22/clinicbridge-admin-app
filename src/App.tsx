@@ -189,12 +189,13 @@ function ReservationsView() {
     }
   }
 
-  const filtered = bookings.filter(b => {
-    if (tab === 'action') return needsAction(b)
-    if (tab === 'rescheduling') return isReschedulePending(b) || isClinicProposed(b)
-    if (tab === 'all') return true
-    return b.booker.status === tab
-  })
+  const matchTab = (b: Booking, key: Tab) => {
+    if (key === 'action') return needsAction(b)
+    if (key === 'rescheduling') return isReschedulePending(b) || isClinicProposed(b)
+    if (key === 'all') return true
+    return b.booker.status === key
+  }
+  const filtered = bookings.filter(b => matchTab(b, tab))
 
   return (
     <div>
@@ -205,7 +206,7 @@ function ReservationsView() {
         </select>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {TABS.map(t => {
-            const count = bookings.filter(b => t.key === 'action' ? needsAction(b) : t.key === 'all' ? true : b.booker.status === t.key).length
+            const count = bookings.filter(b => matchTab(b, t.key)).length
             const active = tab === t.key
             return (
               <button key={t.key} onClick={() => setTab(t.key)} style={{
