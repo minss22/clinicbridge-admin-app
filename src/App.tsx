@@ -115,9 +115,10 @@ function Login() {
 }
 
 // ── 대시보드 ──────────────────────────────────────────────────
-type Tab = 'action' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
+type Tab = 'action' | 'rescheduling' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'action', label: '처리 대기' },
+  { key: 'rescheduling', label: '시간 조정 중' },
   { key: 'confirmed', label: '확정' },
   { key: 'rejected', label: '거절' },
   { key: 'cancelled', label: '취소' },
@@ -190,6 +191,7 @@ function ReservationsView() {
 
   const filtered = bookings.filter(b => {
     if (tab === 'action') return needsAction(b)
+    if (tab === 'rescheduling') return isReschedulePending(b) || isClinicProposed(b)
     if (tab === 'all') return true
     return b.booker.status === tab
   })
