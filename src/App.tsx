@@ -142,6 +142,80 @@ const needsAction = (b: Booking) =>
   isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) ||
   (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
 
+// 날짜 범위 선택 — 시작일 클릭 → 종료일 이어서 클릭. 한쪽 비우면 개방형(이전/이후 전체).
+function RangeCalendar({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const base = from || to || new Date().toISOString().slice(0, 10)
+  const [ym, setYm] = useState(base.slice(0, 7))
+  const [y, m] = ym.split('-').map(Number)
+  const startDow = new Date(y, m - 1, 1).getDay()
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const cells: (string | null)[] = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
+
+  const shiftMonth = (delta: number) => {
+    const nd = new Date(y, m - 1 + delta, 1)
+    setYm(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const clickDay = (ds: string) => {
+    if (!from || (from && to)) onChange(ds, '')                 // 새 범위 시작
+    else if (ds >= from) onChange(from, ds)                     // 종료 지정
+    else onChange(ds, from)                                     // 역순이면 swap
+  }
+  const label = (!from && !to) ? '전체 기간' : `${from ? dot(from) : '처음'} ~ ${to ? dot(to) : '끝'}`
+  const navBtn: React.CSSProperties = { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#555', padding: '0 8px' }
+  const chip: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 8, background: '#F3F4F6', fontSize: 12, color: '#444' }
+  const xBtn: React.CSSProperties = { cursor: 'pointer', color: '#999', fontWeight: 700 }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777' }}>
+        📅 {label}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
+          <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 11, background: '#fff', border: '1px solid #DDD', borderRadius: 12, padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', width: 280 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <button onClick={() => shiftMonth(-1)} style={navBtn}>‹</button>
+              <b style={{ fontSize: 14 }}>{y}년 {m}월</b>
+              <button onClick={() => shiftMonth(1)} style={navBtn}>›</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+              {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
+                <div key={i} style={{ textAlign: 'center', fontSize: 11, color: i === 0 ? '#E53E3E' : i === 6 ? '#3B82F6' : '#999' }}>{d}</div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+              {cells.map((ds, i) => {
+                if (!ds) return <div key={i} />
+                const sel = ds === from || ds === to
+                const inR = !!(from && to && ds > from && ds < to)
+                return (
+                  <button key={i} onClick={() => clickDay(ds)} style={{
+                    padding: '6px 0', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12.5,
+                    background: sel ? '#1D9E75' : inR ? '#E1F5EE' : 'transparent',
+                    color: sel ? '#fff' : '#333', fontWeight: sel ? 700 : 400,
+                  }}>{Number(ds.slice(8))}</button>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <span style={chip}>시작 {from ? dot(from) : '—'} {from && <span onClick={() => onChange('', to)} style={xBtn}>✕</span>}</span>
+              <span style={chip}>종료 {to ? dot(to) : '—'} {to && <span onClick={() => onChange(from, '')} style={xBtn}>✕</span>}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+              <button onClick={() => onChange('', '')} style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', padding: 0 }}>전체 기간</button>
+              <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#1D9E75', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>닫기</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function ReservationsView() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
@@ -149,7 +223,9 @@ function ReservationsView() {
   const [tab, setTab] = useState<Tab>('action')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState('')      // 이름 검색
+  const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
+  const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -196,48 +272,60 @@ function ReservationsView() {
     if (key === 'all') return true
     return b.booker.status === key
   }
-  // 이름(LINE 프로필명·로마자·한국식) + 날짜(접수일·예약일·변경요청일)로 검색
-  const matchSearch = (b: Booking) => {
+  // 이름(LINE 프로필명·로마자·한국식) 검색 — 예약자/동반자 전원 대상
+  const matchName = (b: Booking) => {
     const needle = query.trim().toLowerCase()
     if (!needle) return true
-    const people = [b.booker, ...b.companions]
-    const hay = [
-      b.date, b.requestedDate || '', (b.createdAt || '').slice(0, 10),
-      ...people.flatMap(p => [p.displayName, p.name, p.nameKo]),
-    ].join(' ').toLowerCase()
+    const hay = [b.booker, ...b.companions]
+      .flatMap(p => [p.displayName, p.name, p.nameKo]).join(' ').toLowerCase()
     return hay.includes(needle)
   }
-  const filtered = bookings.filter(b => matchTab(b, tab) && matchSearch(b))
+  // 날짜 범위 — 접수일 또는 예약일이 [from, to] 안이면 일치. 한쪽 빈값=개방형.
+  const matchDate = (b: Booking) => {
+    if (!from && !to) return true
+    const inRange = (d?: string | null) => {
+      if (!d) return false
+      const day = d.slice(0, 10)
+      if (from && day < from) return false
+      if (to && day > to) return false
+      return true
+    }
+    return inRange(b.date) || inRange(b.createdAt)
+  }
+  const filtered = bookings.filter(b => matchTab(b, tab) && matchName(b) && matchDate(b))
 
   return (
     <div>
-      <input
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder="이름 또는 날짜로 검색  (LINE 이름·로마자·한국식 / 접수일·예약일)"
-        style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid #DDD', fontSize: 14, margin: '16px 0 0' }}
-      />
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '12px 0' }}>
+      {/* 1줄: 병원 · 날짜 범위 · 이름 검색 · 새로고침 */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '16px 0 12px' }}>
         <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
           <option value="">전체 병원</option>
           {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
         </select>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {TABS.map(t => {
-            const count = bookings.filter(b => matchTab(b, t.key)).length
-            const active = tab === t.key
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{
-                padding: '8px 14px', borderRadius: 999, border: `1px solid ${active ? '#1D9E75' : '#DDD'}`,
-                background: active ? '#1D9E75' : '#fff', color: active ? '#fff' : '#555',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              }}>
-                {t.label} {count > 0 && <span style={{ opacity: 0.8 }}>({count})</span>}
-              </button>
-            )
-          })}
-        </div>
-        <button onClick={() => load()} style={{ marginLeft: 'auto', padding: '8px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>↻ 새로고침</button>
+        <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} />
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="이름 검색 (LINE·로마자·한국식)"
+          style={{ flex: '1 1 200px', minWidth: 160, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}
+        />
+        <button onClick={() => load()} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>↻ 새로고침</button>
+      </div>
+      {/* 2줄: 상태 탭 */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        {TABS.map(t => {
+          const count = bookings.filter(b => matchTab(b, t.key)).length
+          const active = tab === t.key
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)} style={{
+              padding: '8px 14px', borderRadius: 999, border: `1px solid ${active ? '#1D9E75' : '#DDD'}`,
+              background: active ? '#1D9E75' : '#fff', color: active ? '#fff' : '#555',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>
+              {t.label} {count > 0 && <span style={{ opacity: 0.8 }}>({count})</span>}
+            </button>
+          )
+        })}
       </div>
 
       {loading ? (
