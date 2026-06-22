@@ -173,9 +173,10 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
   return (
     <div style={{ position: 'relative' }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD',
+        height: 38, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center',
+        padding: '0 12px', borderRadius: 8, border: '1px solid #DDD',
         background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777',
-        whiteSpace: 'nowrap',
+        whiteSpace: 'nowrap', lineHeight: 1,
       }}>
         📅 {fieldLabel} · {label}
       </button>
@@ -317,7 +318,7 @@ function ReservationsView() {
     <div>
       {/* 1줄: 병원 · 날짜 범위 · 이름 검색 · 새로고침 */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '16px 0 12px' }}>
-        <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
+        <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
           <option value="">전체 병원</option>
           {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
         </select>
@@ -326,9 +327,9 @@ function ReservationsView() {
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="이름 검색 (LINE·로마자·한국식)"
-          style={{ flex: '1 1 200px', minWidth: 160, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}
+          style={{ flex: '1 1 200px', minWidth: 160, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}
         />
-        <button onClick={() => load()} title="새로고침" style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
+        <button onClick={() => load()} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
       </div>
       {/* 2줄: 상태 탭 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
