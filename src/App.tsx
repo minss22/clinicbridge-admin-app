@@ -149,6 +149,7 @@ function ReservationsView() {
   const [tab, setTab] = useState<Tab>('action')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -195,11 +196,28 @@ function ReservationsView() {
     if (key === 'all') return true
     return b.booker.status === key
   }
-  const filtered = bookings.filter(b => matchTab(b, tab))
+  // 이름(LINE 프로필명·로마자·한국식) + 날짜(접수일·예약일·변경요청일)로 검색
+  const matchSearch = (b: Booking) => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return true
+    const people = [b.booker, ...b.companions]
+    const hay = [
+      b.date, b.requestedDate || '', (b.createdAt || '').slice(0, 10),
+      ...people.flatMap(p => [p.displayName, p.name, p.nameKo]),
+    ].join(' ').toLowerCase()
+    return hay.includes(needle)
+  }
+  const filtered = bookings.filter(b => matchTab(b, tab) && matchSearch(b))
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '16px 0' }}>
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="이름 또는 날짜로 검색  (LINE 이름·로마자·한국식 / 접수일·예약일)"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid #DDD', fontSize: 14, margin: '16px 0 0' }}
+      />
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '12px 0' }}>
         <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
           <option value="">전체 병원</option>
           {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}

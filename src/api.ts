@@ -35,6 +35,7 @@ export type Person = {
   status: string
   name: string
   nameKo: string
+  displayName: string
   birthDate: string | null
   gender: string | null
   visitType: 'first' | 'return'
