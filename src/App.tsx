@@ -251,7 +251,7 @@ function ReservationsView() {
   const [query, setQuery] = useState('')      // 이름 검색
   const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
   const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
-  const [dateField, setDateField] = useState<'created' | 'reserved'>('reserved')  // 접수일/예약일 중 무엇으로 검색
+  const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
