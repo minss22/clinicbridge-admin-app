@@ -165,6 +165,7 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<'' | 'confirmed' | 'rejected' | 'proposed'>('')
   const [err, setErr] = useState('')
+  const [confirmAction, setConfirmAction] = useState<null | { result: 'confirmed' | 'rejected' | 'proposed'; fn: () => Promise<unknown> }>(null)
 
   useEffect(() => {
     adminApi.getManagerProposeInfo(reservationId)
@@ -183,6 +184,12 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
     try { await fn(); setDone(result) }
     catch (e: any) { setErr(e?.message || '처리에 실패했습니다') }
     finally { setBusy(false) }
+  }
+  const proceed = async () => {
+    if (!confirmAction) return
+    const { fn, result } = confirmAction
+    setConfirmAction(null)
+    await run(fn, result)
   }
 
   const wrap = (children: React.ReactNode) => (
@@ -223,8 +230,8 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
       {!proposing ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button disabled={busy} onClick={() => run(() => adminApi.managerConfirm(reservationId), 'confirmed')} style={btn('#1D9E75', '#fff')}>✅ 확정</button>
-            <button disabled={busy} onClick={() => run(() => adminApi.managerReject(reservationId), 'rejected')} style={btn('#fff', '#E53E3E', '#E53E3E')}>❌ 거절</button>
+            <button disabled={busy} onClick={() => setConfirmAction({ result: 'confirmed', fn: () => adminApi.managerConfirm(reservationId) })} style={btn('#1D9E75', '#fff')}>✅ 확정</button>
+            <button disabled={busy} onClick={() => setConfirmAction({ result: 'rejected', fn: () => adminApi.managerReject(reservationId) })} style={btn('#fff', '#E53E3E', '#E53E3E')}>❌ 거절</button>
           </div>
           {info.canPropose && (
             <button disabled={busy} onClick={() => setProposing(true)} style={{ ...btn('#FFFBEB', '#B45309', '#F6A623'), borderStyle: 'dashed' }}>🕒 다른 시간 제안</button>
@@ -247,7 +254,23 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button disabled={busy} onClick={() => { setProposing(false); setPicked([]) }} style={btn('#fff', '#666', '#DDD')}>뒤로</button>
-            <button disabled={busy || !picked.length} onClick={() => run(() => adminApi.managerPropose(reservationId, info.targetDate!, picked), 'proposed')} style={{ ...btn(picked.length ? '#F6A623' : '#E5E7EB', '#fff'), flex: 2 }}>{busy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+            <button disabled={busy || !picked.length} onClick={() => setConfirmAction({ result: 'proposed', fn: () => adminApi.managerPropose(reservationId, info.targetDate!, picked) })} style={{ ...btn(picked.length ? '#F6A623' : '#E5E7EB', '#fff'), flex: 2 }}>{busy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+          </div>
+        </div>
+      )}
+
+      {confirmAction && (
+        <div onClick={() => !busy && setConfirmAction(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: '22px 20px', width: '100%', maxWidth: 320, textAlign: 'center' }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#222', whiteSpace: 'pre-line', lineHeight: 1.6, margin: '0 0 18px' }}>
+              {confirmAction.result === 'confirmed' ? '이 예약을 확정하시겠습니까?'
+                : confirmAction.result === 'rejected' ? '이 예약을 거절하시겠습니까?'
+                : `다음 시간을 제안하시겠습니까?\n${dot(info.targetDate)} · ${picked.join(', ')}`}
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button disabled={busy} onClick={() => setConfirmAction(null)} style={btn('#fff', '#666', '#DDD')}>취소</button>
+              <button disabled={busy} onClick={proceed} style={btn(confirmAction.result === 'rejected' ? '#E53E3E' : '#1D9E75', '#fff')}>예</button>
+            </div>
           </div>
         </div>
       )}
