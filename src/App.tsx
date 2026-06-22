@@ -189,7 +189,7 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
           <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 11, background: '#fff', border: '1px solid #DDD', borderRadius: 12, padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', width: 280 }}>
             <div style={{ display: 'flex', marginBottom: 10, border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
-              {([['reserved', '예약일'], ['created', '접수일']] as const).map(([k, lbl]) => (
+              {([['created', '접수일'], ['reserved', '예약일']] as const).map(([k, lbl]) => (
                 <button key={k} onClick={() => onDateField(k)} style={{
                   flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
                   background: dateField === k ? '#1D9E75' : '#fff', color: dateField === k ? '#fff' : '#666',
