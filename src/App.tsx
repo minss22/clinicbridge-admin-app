@@ -147,6 +147,7 @@ function RangeCalendar({ from, to, onChange }: { from: string; to: string; onCha
   const [open, setOpen] = useState(false)
   const base = from || to || new Date().toISOString().slice(0, 10)
   const [ym, setYm] = useState(base.slice(0, 7))
+  const [anchor, setAnchor] = useState<string | null>(null)  // 첫 클릭 기준일(범위 확정 대기)
   const [y, m] = ym.split('-').map(Number)
   const startDow = new Date(y, m - 1, 1).getDay()
   const daysInMonth = new Date(y, m, 0).getDate()
@@ -159,14 +160,11 @@ function RangeCalendar({ from, to, onChange }: { from: string; to: string; onCha
     setYm(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`)
   }
   const clickDay = (ds: string) => {
-    if (!from || (from && to)) onChange(ds, '')                 // 새 범위 시작
-    else if (ds >= from) onChange(from, ds)                     // 종료 지정
-    else onChange(ds, from)                                     // 역순이면 swap
+    if (anchor === null) { setAnchor(ds); onChange(ds, ds) }    // 처음 클릭: 시작=종료
+    else { ds >= anchor ? onChange(anchor, ds) : onChange(ds, anchor); setAnchor(null) }  // 두번째: 범위 확정
   }
   const label = (!from && !to) ? '전체 기간' : `${from ? dot(from) : '처음'} ~ ${to ? dot(to) : '끝'}`
   const navBtn: React.CSSProperties = { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#555', padding: '0 8px' }
-  const chip: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 8, background: '#F3F4F6', fontSize: 12, color: '#444' }
-  const xBtn: React.CSSProperties = { cursor: 'pointer', color: '#999', fontWeight: 700 }
 
   return (
     <div style={{ position: 'relative' }}>
@@ -201,9 +199,15 @@ function RangeCalendar({ from, to, onChange }: { from: string; to: string; onCha
                 )
               })}
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <span style={chip}>시작 {from ? dot(from) : '—'} {from && <span onClick={() => onChange('', to)} style={xBtn}>✕</span>}</span>
-              <span style={chip}>종료 {to ? dot(to) : '—'} {to && <span onClick={() => onChange(from, '')} style={xBtn}>✕</span>}</span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              {([['시작일', from, () => { onChange('', to); setAnchor(null) }],
+                 ['종료일', to, () => { onChange(from, ''); setAnchor(null) }]] as const).map(([lbl, val, clear]) => (
+                <div key={lbl} style={{ position: 'relative', flex: 1, border: '1px solid #E5E7EB', borderRadius: 8, padding: '7px 10px', background: '#FAFAFA' }}>
+                  <div style={{ fontSize: 10.5, color: '#999', marginBottom: 2 }}>{lbl}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: val ? '#111' : '#BBB' }}>{val ? dot(val) : '제한 없음'}</div>
+                  {val && <span onClick={clear} style={{ position: 'absolute', top: 3, right: 6, fontSize: 12, color: '#999', cursor: 'pointer', fontWeight: 700, lineHeight: 1 }}>✕</span>}
+                </div>
+              ))}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
               <button onClick={() => onChange('', '')} style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', padding: 0 }}>전체 기간</button>
