@@ -173,7 +173,7 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
   return (
     <div style={{ position: 'relative' }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        width: 250, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD',
+        width: 330, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD',
         background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777',
         textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
