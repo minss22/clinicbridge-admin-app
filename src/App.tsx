@@ -124,6 +124,15 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'cancelled', label: '취소' },
   { key: 'all', label: '전체' },
 ]
+// 탭별 색 (배경=연한 색 / 글씨=상태 색). action=대기색, all=중립색.
+const TAB_COLOR: Record<Tab, { bg: string; fg: string }> = {
+  action: STATUS_COLOR.pending,
+  rescheduling: STATUS_COLOR.rescheduling,
+  confirmed: STATUS_COLOR.confirmed,
+  rejected: STATUS_COLOR.rejected,
+  cancelled: STATUS_COLOR.cancelled,
+  all: { bg: '#EEF2F7', fg: '#475569' },
+}
 
 function pendingCompanionBatches(b: Booking): Person[][] {
   const map: Record<string, Person[]> = {}
@@ -340,13 +349,15 @@ function ReservationsView() {
         {TABS.map(t => {
           const count = bookings.filter(b => matchTab(b, t.key)).length
           const active = tab === t.key
+          const c = TAB_COLOR[t.key]
           return (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '8px 14px', borderRadius: 999, border: `1px solid ${active ? '#1D9E75' : '#DDD'}`,
-              background: active ? '#1D9E75' : '#fff', color: active ? '#fff' : '#555',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              padding: '8px 14px', borderRadius: 999,
+              border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
+              background: active ? c.bg : '#fff', color: c.fg,
+              fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
             }}>
-              {t.label} {count > 0 && <span style={{ opacity: 0.8 }}>({count})</span>}
+              {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
             </button>
           )
         })}
