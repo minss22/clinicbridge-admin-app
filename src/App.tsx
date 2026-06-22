@@ -25,9 +25,9 @@ const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
 const LIFF_ID = (import.meta.env.VITE_LIFF_ID as string) || '2010411582-Duzo9BLZ'
 
 export default function App() {
-  // 매니저 시간제안 페이지(로그인 없음) — 알림 버튼 링크 ?propose=<id>
-  const proposeId = new URLSearchParams(window.location.search).get('propose')
-  if (proposeId) return <ManagerProposePage reservationId={proposeId} />
+  // 매니저 예약 처리 페이지(로그인 없음) — 알림 단일 버튼 링크 ?manage=<id>
+  const manageId = new URLSearchParams(window.location.search).get('manage')
+  if (manageId) return <ManagerActionPage reservationId={manageId} />
 
   const [session, setSession] = useState<Session | null | undefined>(undefined)
 
@@ -155,13 +155,15 @@ const needsAction = (b: Booking) =>
   isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) ||
   (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
 
-// 매니저 시간제안 페이지 (로그인 없음 · LINE 알림 버튼으로 진입)
-function ManagerProposePage({ reservationId }: { reservationId: string }) {
+// 매니저 예약 처리 페이지 (로그인 없음 · LINE 알림의 단일 버튼으로 진입)
+// 한 화면에서 확정 / 거절 / 다른 시간 제안.
+function ManagerActionPage({ reservationId }: { reservationId: string }) {
   const [info, setInfo] = useState<ManagerProposeInfo | null>(null)
   const [slots, setSlots] = useState<{ time: string; available: boolean }[]>([])
   const [picked, setPicked] = useState<string[]>([])
+  const [proposing, setProposing] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState(false)
+  const [done, setDone] = useState<'' | 'confirmed' | 'rejected' | 'proposed'>('')
   const [err, setErr] = useState('')
 
   useEffect(() => {
@@ -176,11 +178,10 @@ function ManagerProposePage({ reservationId }: { reservationId: string }) {
   }, [reservationId])
 
   const toggle = (t: string) => setPicked(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t])
-  const submit = async () => {
-    if (!info?.targetDate || !picked.length) return
-    setBusy(true)
-    try { await adminApi.managerPropose(reservationId, info.targetDate, picked); setDone(true) }
-    catch (e: any) { setErr(e?.message || '제안에 실패했습니다') }
+  const run = async (fn: () => Promise<unknown>, result: 'confirmed' | 'rejected' | 'proposed') => {
+    setBusy(true); setErr('')
+    try { await fn(); setDone(result) }
+    catch (e: any) { setErr(e?.message || '처리에 실패했습니다') }
     finally { setBusy(false) }
   }
 
@@ -189,44 +190,67 @@ function ManagerProposePage({ reservationId }: { reservationId: string }) {
       <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>{children}</div>
     </div>
   )
+  const btn = (bg: string, color: string, border?: string): React.CSSProperties => ({
+    flex: 1, padding: '13px', borderRadius: 10, border: border ? `1.5px solid ${border}` : 'none',
+    background: bg, color, fontSize: 15, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+  })
 
-  if (err) return wrap(<p style={{ color: '#E53E3E', fontSize: 14 }}>{err}</p>)
+  if (err && !info) return wrap(<p style={{ color: '#E53E3E', fontSize: 14 }}>{err}</p>)
   if (!info) return wrap(<p style={{ color: '#888', fontSize: 14 }}>불러오는 중…</p>)
   if (!info.ok) return wrap(<p style={{ color: '#888', fontSize: 14 }}>{info.reason === 'closed' ? '이미 취소/거절된 예약입니다.' : '예약을 찾을 수 없습니다.'}</p>)
-  if (done) return wrap(
-    <div style={{ textAlign: 'center', padding: '20px 0' }}>
-      <div style={{ fontSize: 44 }}>✅</div>
-      <p style={{ fontWeight: 700, fontSize: 16, margin: '10px 0 6px' }}>시간을 제안했습니다</p>
-      <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6 }}>고객이 시간을 선택하면 예약이 확정되고<br />알림을 받습니다. 이 창은 닫으셔도 됩니다.</p>
-    </div>
-  )
+  if (done) {
+    const [icon, title] = done === 'confirmed' ? ['✅', '예약을 확정했습니다'] : done === 'rejected' ? ['❌', '예약을 거절했습니다'] : ['🕒', '시간을 제안했습니다']
+    return wrap(
+      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+        <div style={{ fontSize: 44 }}>{icon}</div>
+        <p style={{ fontWeight: 700, fontSize: 16, margin: '10px 0 6px' }}>{title}</p>
+        <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6 }}>고객에게 알림이 발송되었습니다.<br />이 창은 닫으셔도 됩니다.</p>
+      </div>
+    )
+  }
 
   return wrap(
     <>
-      <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>🕒 다른 시간 제안</h2>
+      <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>🔔 예약 처리</h2>
       <p style={{ color: '#888', fontSize: 13, margin: '0 0 14px' }}>{info.branchName} · {info.nameKo}님</p>
-      <div style={{ background: '#F8F9FB', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#555', marginBottom: 14, lineHeight: 1.7 }}>
+      <div style={{ background: '#F8F9FB', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#555', marginBottom: 16, lineHeight: 1.7 }}>
         <div>현재 예약: {dot(info.currentDate)} {info.currentTime}</div>
-        {info.requestedDate && <div>고객 요청: {dot(info.requestedDate)} {info.requestedTime}</div>}
-        <div style={{ marginTop: 4, fontWeight: 700, color: '#111' }}>제안 날짜: {dot(info.targetDate)}</div>
+        {info.requestedDate && <div style={{ color: '#9A3412', fontWeight: 700 }}>고객 변경요청: {dot(info.requestedDate)} {info.requestedTime}</div>}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#444', marginBottom: 8 }}>제안할 시간 선택 (여러 개 가능)</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {slots.length === 0 && <span style={{ color: '#999', fontSize: 13 }}>해당 날짜에 가능한 시간이 없습니다.</span>}
-        {slots.map(s => {
-          const on = picked.includes(s.time)
-          return (
-            <button key={s.time} disabled={!s.available} onClick={() => toggle(s.time)} style={{
-              padding: '9px 14px', borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: s.available ? 'pointer' : 'not-allowed',
-              border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : s.available ? '#333' : '#CCC',
-            }}>{s.time}</button>
-          )
-        })}
-      </div>
-      <button disabled={busy || !picked.length} onClick={submit} style={{
-        width: '100%', marginTop: 18, padding: '13px', borderRadius: 10, border: 'none',
-        background: picked.length ? '#F6A623' : '#E5E7EB', color: '#fff', fontSize: 15, fontWeight: 700, cursor: picked.length ? 'pointer' : 'default',
-      }}>{busy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+
+      {err && <p style={{ color: '#E53E3E', fontSize: 13, marginBottom: 10 }}>{err}</p>}
+
+      {!proposing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button disabled={busy} onClick={() => run(() => adminApi.managerConfirm(reservationId), 'confirmed')} style={btn('#1D9E75', '#fff')}>✅ 확정</button>
+            <button disabled={busy} onClick={() => run(() => adminApi.managerReject(reservationId), 'rejected')} style={btn('#fff', '#E53E3E', '#E53E3E')}>❌ 거절</button>
+          </div>
+          {info.canPropose && (
+            <button disabled={busy} onClick={() => setProposing(true)} style={{ ...btn('#FFFBEB', '#B45309', '#F6A623'), borderStyle: 'dashed' }}>🕒 다른 시간 제안</button>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#444', marginBottom: 8 }}>제안 날짜 {dot(info.targetDate)} · 시간 선택 (여러 개)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {slots.length === 0 && <span style={{ color: '#999', fontSize: 13 }}>가능한 시간이 없습니다.</span>}
+            {slots.map(s => {
+              const on = picked.includes(s.time)
+              return (
+                <button key={s.time} disabled={!s.available} onClick={() => toggle(s.time)} style={{
+                  padding: '9px 14px', borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: s.available ? 'pointer' : 'not-allowed',
+                  border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : s.available ? '#333' : '#CCC',
+                }}>{s.time}</button>
+              )
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button disabled={busy} onClick={() => { setProposing(false); setPicked([]) }} style={btn('#fff', '#666', '#DDD')}>뒤로</button>
+            <button disabled={busy || !picked.length} onClick={() => run(() => adminApi.managerPropose(reservationId, info.targetDate!, picked), 'proposed')} style={{ ...btn(picked.length ? '#F6A623' : '#E5E7EB', '#fff'), flex: 2 }}>{busy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

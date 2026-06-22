@@ -72,6 +72,7 @@ export type Customer = {
 export type ManagerProposeInfo = {
   ok: boolean; reason?: string
   branchId?: string; branchName?: string; nameKo?: string
+  status?: string; canPropose?: boolean
   currentDate?: string; currentTime?: string
   requestedDate?: string | null; requestedTime?: string | null
   targetDate?: string
@@ -99,9 +100,11 @@ export const adminApi = {
   getCustomerReservations: (lineUserId: string): Promise<Booking[]> =>
     adminGet('admin-customer-reservations', { lineUserId }),
 
-  // 매니저 시간제안 (로그인 없음 · 알림 링크로 진입)
+  // 매니저 예약 처리 (로그인 없음 · 알림 링크로 진입)
   getManagerProposeInfo: (reservationId: string): Promise<ManagerProposeInfo> =>
     adminGet('manager-propose-info', { reservationId }),
   managerPropose: (reservationId: string, date: string, times: string[]) =>
     adminPost('manager-propose', { reservationId, date, times }),
+  managerConfirm: (reservationId: string) => adminPost('manager-confirm', { reservationId }),
+  managerReject: (reservationId: string) => adminPost('manager-reject', { reservationId }),
 }
