@@ -6,13 +6,15 @@ import type { Booking, Branch, Person, AdminBranch, Customer } from './api'
 
 const STATUS_KO: Record<string, string> = {
   pending: '대기', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
+  rescheduling: '시간 조정 중',
 }
-const STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
-  pending: { bg: '#FEF3C7', fg: '#92400E' },
-  confirmed: { bg: '#D1FAE5', fg: '#065F46' },
-  rejected: { bg: '#FEE2E2', fg: '#991B1B' },
-  cancelled: { bg: '#F3F4F6', fg: '#6B7280' },
-  completed: { bg: '#E0E7FF', fg: '#3730A3' },
+const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
+  pending:      { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
+  confirmed:    { bg: '#D1FAE5', fg: '#065F46', border: '#6EE7B7' },
+  rejected:     { bg: '#FEE2E2', fg: '#991B1B', border: '#FCA5A5' },
+  cancelled:    { bg: '#F3F4F6', fg: '#6B7280', border: '#E5E7EB' },
+  completed:    { bg: '#E0E7FF', fg: '#3730A3', border: '#C7D2FE' },
+  rescheduling: { bg: '#FFEDD5', fg: '#9A3412', border: '#FDBA74' },
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
@@ -131,6 +133,9 @@ function pendingCompanionBatches(b: Booking): Person[][] {
 }
 const isClinicProposed = (b: Booking) => !!b.requestedDate && b.proposedBy === 'clinic'  // 고객 응답 대기
 const isReschedulePending = (b: Booking) => !!b.requestedDate && b.proposedBy !== 'clinic'  // 고객 변경요청 → 병원 처리
+// 예약자 배지에 표시할 상태: 시간 조정(고객 요청/병원 제안) 중이면 'rescheduling'
+const bookerDisplayStatus = (b: Booking) =>
+  (isReschedulePending(b) || isClinicProposed(b)) ? 'rescheduling' : b.booker.status
 const isNewPending = (b: Booking) => b.booker.status === 'pending' && !b.requestedDate
 const needsAction = (b: Booking) =>
   isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) ||
@@ -230,8 +235,10 @@ function ReservationsView() {
 const genderKo = (g?: string | null) => (g === 'male' ? '남성' : g === 'female' ? '여성' : (g || '-'))
 const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight: 4 }
 
-function PersonDetail({ label, p, showStatus }: { label: string; p: Person; showStatus?: boolean }) {
+function PersonDetail({ label, p, showStatus, displayStatus }: { label: string; p: Person; showStatus?: boolean; displayStatus?: string }) {
   const [more, setMore] = useState(false)
+  const st = displayStatus ?? p.status
+  const sc = STATUS_COLOR[st] ?? STATUS_COLOR.pending
   const moreBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#1D9E75', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, flexShrink: 0, whiteSpace: 'nowrap' }
   const isFirst = p.visitType === 'first'
   const visitPill: React.CSSProperties = {
@@ -241,7 +248,7 @@ function PersonDetail({ label, p, showStatus }: { label: string; p: Person; show
       : { color: '#9333EA', background: '#FAF5FF', borderColor: '#E9D5FF' }),  // 재진
   }
   return (
-    <div style={{ border: '1px solid #EFEFEF', borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ border: `1.5px solid ${sc.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* 1줄: 이름 · 생년월일 · 성별  +  상태 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>
@@ -250,7 +257,7 @@ function PersonDetail({ label, p, showStatus }: { label: string; p: Person; show
           {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}
           {' · '}{p.birthDate || '-'}{' · '}{genderKo(p.gender)}
         </div>
-        {showStatus && <StatusBadge status={p.status} />}
+        {showStatus && <StatusBadge status={st} />}
       </div>
 
       {/* 2줄: 초진/재진(동그라미) + 희망시술  +  더보기(오른쪽 끝) */}
@@ -356,7 +363,7 @@ function BookingCard({ b, busy, act, reload }: { b: Booking; busy: string | null
     <div style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 14, padding: 16 }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444', marginBottom: 4 }}>{b.branchName} · {dot(b.date)} {b.time}</div>
 
-      <PersonDetail label="예약자" p={b.booker} showStatus />
+      <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} />
       {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus />)}
 
       {/* 병원이 제안함 — 고객 응답 대기 */}
@@ -610,11 +617,8 @@ function CustomersView() {
 function ReadonlyBooking({ b }: { b: Booking }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 14, padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444' }}>{b.branchName} · {dot(b.date)} {b.time}</div>
-        <StatusBadge status={b.booker.status} />
-      </div>
-      <PersonDetail label="예약자" p={b.booker} />
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444', marginBottom: 4 }}>{b.branchName} · {dot(b.date)} {b.time}</div>
+      <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} />
       {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus />)}
     </div>
   )
