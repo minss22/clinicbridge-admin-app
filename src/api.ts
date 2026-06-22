@@ -71,8 +71,9 @@ export type Customer = {
 }
 export type ManagerProposeInfo = {
   ok: boolean; reason?: string
+  state?: 'actionable' | 'confirmed' | 'rejected' | 'cancelled' | 'proposed_waiting'
   branchId?: string; branchName?: string; nameKo?: string
-  status?: string; canPropose?: boolean
+  status?: string; canPropose?: boolean; proposedTimes?: string[]
   currentDate?: string; currentTime?: string
   requestedDate?: string | null; requestedTime?: string | null
   targetDate?: string

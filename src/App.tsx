@@ -204,7 +204,7 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
 
   if (err && !info) return wrap(<p style={{ color: '#E53E3E', fontSize: 14 }}>{err}</p>)
   if (!info) return wrap(<p style={{ color: '#888', fontSize: 14 }}>불러오는 중…</p>)
-  if (!info.ok) return wrap(<p style={{ color: '#888', fontSize: 14 }}>{info.reason === 'closed' ? '이미 취소/거절된 예약입니다.' : '예약을 찾을 수 없습니다.'}</p>)
+  if (!info.ok) return wrap(<p style={{ color: '#888', fontSize: 14 }}>예약을 찾을 수 없습니다.</p>)
   if (done) {
     const [icon, title] = done === 'confirmed' ? ['✅', '예약을 확정했습니다'] : done === 'rejected' ? ['❌', '예약을 거절했습니다'] : ['🕒', '시간을 제안했습니다']
     return wrap(
@@ -213,6 +213,28 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
         <p style={{ fontWeight: 700, fontSize: 16, margin: '10px 0 6px' }}>{title}</p>
         <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6 }}>고객에게 알림이 발송되었습니다.<br />이 창은 닫으셔도 됩니다.</p>
       </div>
+    )
+  }
+  // 이미 처리된 예약 — 재진입 시 버튼 대신 정보 + 상태 표시
+  if (info.state && info.state !== 'actionable') {
+    const [icon, label] = info.state === 'confirmed' ? ['✅', '확정된 예약입니다']
+      : info.state === 'rejected' ? ['❌', '거절된 예약입니다']
+      : info.state === 'cancelled' ? ['🚫', '취소된 예약입니다']
+      : ['🕒', '시간 제안 후 고객 응답 대기 중입니다']
+    return wrap(
+      <>
+        <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>🔔 예약 처리</h2>
+        <p style={{ color: '#888', fontSize: 13, margin: '0 0 14px' }}>{info.branchName} · {info.nameKo}님</p>
+        <div style={{ background: '#F8F9FB', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#555', marginBottom: 16, lineHeight: 1.7 }}>
+          <div>예약 일시: {dot(info.currentDate)} {info.currentTime}</div>
+          {info.state === 'proposed_waiting' && <div style={{ color: '#9A3412' }}>제안한 시간: {dot(info.targetDate)} · {(info.proposedTimes ?? []).join(', ')}</div>}
+        </div>
+        <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+          <div style={{ fontSize: 40 }}>{icon}</div>
+          <p style={{ fontWeight: 700, fontSize: 16, margin: '8px 0 4px' }}>{label}</p>
+          <p style={{ color: '#888', fontSize: 13 }}>이미 처리된 예약입니다. 이 창은 닫으셔도 됩니다.</p>
+        </div>
+      </>
     )
   }
 
