@@ -69,6 +69,13 @@ export type Customer = {
   lineUserId: string; name: string; nameKo: string; displayName: string
   birthDate: string | null; gender: string | null; createdAt: string
 }
+export type ManagerProposeInfo = {
+  ok: boolean; reason?: string
+  branchId?: string; branchName?: string; nameKo?: string
+  currentDate?: string; currentTime?: string
+  requestedDate?: string | null; requestedTime?: string | null
+  targetDate?: string
+}
 
 export const adminApi = {
   getBranches: (): Promise<Branch[]> => adminGet('admin-branches'),
@@ -91,4 +98,10 @@ export const adminApi = {
   getCustomers: (): Promise<Customer[]> => adminGet('admin-customers'),
   getCustomerReservations: (lineUserId: string): Promise<Booking[]> =>
     adminGet('admin-customer-reservations', { lineUserId }),
+
+  // 매니저 시간제안 (로그인 없음 · 알림 링크로 진입)
+  getManagerProposeInfo: (reservationId: string): Promise<ManagerProposeInfo> =>
+    adminGet('manager-propose-info', { reservationId }),
+  managerPropose: (reservationId: string, date: string, times: string[]) =>
+    adminPost('manager-propose', { reservationId, date, times }),
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { adminApi } from './api'
-import type { Booking, Branch, Person, AdminBranch, Customer } from './api'
+import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo } from './api'
 
 const STATUS_KO: Record<string, string> = {
   pending: '대기', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
@@ -25,6 +25,10 @@ const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
 const LIFF_ID = (import.meta.env.VITE_LIFF_ID as string) || '2010411582-Duzo9BLZ'
 
 export default function App() {
+  // 매니저 시간제안 페이지(로그인 없음) — 알림 버튼 링크 ?propose=<id>
+  const proposeId = new URLSearchParams(window.location.search).get('propose')
+  if (proposeId) return <ManagerProposePage reservationId={proposeId} />
+
   const [session, setSession] = useState<Session | null | undefined>(undefined)
 
   useEffect(() => {
@@ -150,6 +154,82 @@ const isNewPending = (b: Booking) => b.booker.status === 'pending' && !b.request
 const needsAction = (b: Booking) =>
   isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) ||
   (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
+
+// 매니저 시간제안 페이지 (로그인 없음 · LINE 알림 버튼으로 진입)
+function ManagerProposePage({ reservationId }: { reservationId: string }) {
+  const [info, setInfo] = useState<ManagerProposeInfo | null>(null)
+  const [slots, setSlots] = useState<{ time: string; available: boolean }[]>([])
+  const [picked, setPicked] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    adminApi.getManagerProposeInfo(reservationId)
+      .then(i => {
+        setInfo(i)
+        if (i.ok && i.branchId && i.targetDate) {
+          adminApi.getSlots(i.branchId, i.targetDate).then(setSlots).catch(() => setSlots([]))
+        }
+      })
+      .catch(e => setErr(e?.message || '불러오기에 실패했습니다'))
+  }, [reservationId])
+
+  const toggle = (t: string) => setPicked(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t])
+  const submit = async () => {
+    if (!info?.targetDate || !picked.length) return
+    setBusy(true)
+    try { await adminApi.managerPropose(reservationId, info.targetDate, picked); setDone(true) }
+    catch (e: any) { setErr(e?.message || '제안에 실패했습니다') }
+    finally { setBusy(false) }
+  }
+
+  const wrap = (children: React.ReactNode) => (
+    <div style={{ minHeight: '100dvh', background: '#F5F6F8', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>{children}</div>
+    </div>
+  )
+
+  if (err) return wrap(<p style={{ color: '#E53E3E', fontSize: 14 }}>{err}</p>)
+  if (!info) return wrap(<p style={{ color: '#888', fontSize: 14 }}>불러오는 중…</p>)
+  if (!info.ok) return wrap(<p style={{ color: '#888', fontSize: 14 }}>{info.reason === 'closed' ? '이미 취소/거절된 예약입니다.' : '예약을 찾을 수 없습니다.'}</p>)
+  if (done) return wrap(
+    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+      <div style={{ fontSize: 44 }}>✅</div>
+      <p style={{ fontWeight: 700, fontSize: 16, margin: '10px 0 6px' }}>시간을 제안했습니다</p>
+      <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6 }}>고객이 시간을 선택하면 예약이 확정되고<br />알림을 받습니다. 이 창은 닫으셔도 됩니다.</p>
+    </div>
+  )
+
+  return wrap(
+    <>
+      <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>🕒 다른 시간 제안</h2>
+      <p style={{ color: '#888', fontSize: 13, margin: '0 0 14px' }}>{info.branchName} · {info.nameKo}님</p>
+      <div style={{ background: '#F8F9FB', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#555', marginBottom: 14, lineHeight: 1.7 }}>
+        <div>현재 예약: {dot(info.currentDate)} {info.currentTime}</div>
+        {info.requestedDate && <div>고객 요청: {dot(info.requestedDate)} {info.requestedTime}</div>}
+        <div style={{ marginTop: 4, fontWeight: 700, color: '#111' }}>제안 날짜: {dot(info.targetDate)}</div>
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#444', marginBottom: 8 }}>제안할 시간 선택 (여러 개 가능)</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {slots.length === 0 && <span style={{ color: '#999', fontSize: 13 }}>해당 날짜에 가능한 시간이 없습니다.</span>}
+        {slots.map(s => {
+          const on = picked.includes(s.time)
+          return (
+            <button key={s.time} disabled={!s.available} onClick={() => toggle(s.time)} style={{
+              padding: '9px 14px', borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: s.available ? 'pointer' : 'not-allowed',
+              border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : s.available ? '#333' : '#CCC',
+            }}>{s.time}</button>
+          )
+        })}
+      </div>
+      <button disabled={busy || !picked.length} onClick={submit} style={{
+        width: '100%', marginTop: 18, padding: '13px', borderRadius: 10, border: 'none',
+        background: picked.length ? '#F6A623' : '#E5E7EB', color: '#fff', fontSize: 15, fontWeight: 700, cursor: picked.length ? 'pointer' : 'default',
+      }}>{busy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+    </>
+  )
+}
 
 // 날짜 범위 선택 — 시작일 클릭 → 종료일 이어서 클릭. 한쪽 비우면 개방형(이전/이후 전체).
 function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
