@@ -173,9 +173,9 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
   return (
     <div style={{ position: 'relative' }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        width: 330, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD',
+        padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD',
         background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777',
-        textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
       }}>
         📅 {fieldLabel} · {label}
       </button>
@@ -328,7 +328,7 @@ function ReservationsView() {
           placeholder="이름 검색 (LINE·로마자·한국식)"
           style={{ flex: '1 1 200px', minWidth: 160, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}
         />
-        <button onClick={() => load()} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>↻ 새로고침</button>
+        <button onClick={() => load()} title="새로고침" style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
       </div>
       {/* 2줄: 상태 탭 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
