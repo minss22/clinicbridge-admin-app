@@ -178,7 +178,11 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
         background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777',
         whiteSpace: 'nowrap', lineHeight: 1,
       }}>
-        📅 {fieldLabel} · {label}
+        {/* 보이지 않는 최대 길이 라벨로 폭을 고정 — 선택 상태와 무관하게 너비 불변 */}
+        <span style={{ display: 'inline-grid', textAlign: 'left' }}>
+          <span style={{ gridArea: '1 / 1', visibility: 'hidden', whiteSpace: 'nowrap' }} aria-hidden>📅 예약일 · 2026.06.01 ~ 2026.06.30</span>
+          <span style={{ gridArea: '1 / 1', whiteSpace: 'nowrap' }}>📅 {fieldLabel} · {label}</span>
+        </span>
       </button>
       {open && (
         <>
