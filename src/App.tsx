@@ -143,7 +143,10 @@ const needsAction = (b: Booking) =>
   (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
 
 // 날짜 범위 선택 — 시작일 클릭 → 종료일 이어서 클릭. 한쪽 비우면 개방형(이전/이후 전체).
-function RangeCalendar({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
+function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
+  from: string; to: string; onChange: (from: string, to: string) => void
+  dateField: 'created' | 'reserved'; onDateField: (f: 'created' | 'reserved') => void
+}) {
   const [open, setOpen] = useState(false)
   const base = from || to || new Date().toISOString().slice(0, 10)
   const [ym, setYm] = useState(base.slice(0, 7))
@@ -163,18 +166,31 @@ function RangeCalendar({ from, to, onChange }: { from: string; to: string; onCha
     if (anchor === null) { setAnchor(ds); onChange(ds, ds) }    // 처음 클릭: 시작=종료
     else { ds >= anchor ? onChange(anchor, ds) : onChange(ds, anchor); setAnchor(null) }  // 두번째: 범위 확정
   }
+  const fieldLabel = dateField === 'created' ? '접수일' : '예약일'
   const label = (!from && !to) ? '전체 기간' : `${from ? dot(from) : '처음'} ~ ${to ? dot(to) : '끝'}`
   const navBtn: React.CSSProperties = { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#555', padding: '0 8px' }
 
   return (
     <div style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777' }}>
-        📅 {label}
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: 250, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #DDD',
+        background: '#fff', fontSize: 14, cursor: 'pointer', color: (from || to) ? '#111' : '#777',
+        textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        📅 {fieldLabel} · {label}
       </button>
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
           <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 11, background: '#fff', border: '1px solid #DDD', borderRadius: 12, padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', width: 280 }}>
+            <div style={{ display: 'flex', marginBottom: 10, border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
+              {([['reserved', '예약일'], ['created', '접수일']] as const).map(([k, lbl]) => (
+                <button key={k} onClick={() => onDateField(k)} style={{
+                  flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                  background: dateField === k ? '#1D9E75' : '#fff', color: dateField === k ? '#fff' : '#666',
+                }}>{lbl}</button>
+              ))}
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <button onClick={() => shiftMonth(-1)} style={navBtn}>‹</button>
               <b style={{ fontSize: 14 }}>{y}년 {m}월</b>
@@ -230,6 +246,7 @@ function ReservationsView() {
   const [query, setQuery] = useState('')      // 이름 검색
   const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
   const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
+  const [dateField, setDateField] = useState<'created' | 'reserved'>('reserved')  // 접수일/예약일 중 무엇으로 검색
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -284,17 +301,15 @@ function ReservationsView() {
       .flatMap(p => [p.displayName, p.name, p.nameKo]).join(' ').toLowerCase()
     return hay.includes(needle)
   }
-  // 날짜 범위 — 접수일 또는 예약일이 [from, to] 안이면 일치. 한쪽 빈값=개방형.
+  // 날짜 범위 — 선택한 기준일(접수일/예약일)이 [from, to] 안이면 일치. 한쪽 빈값=개방형.
   const matchDate = (b: Booking) => {
     if (!from && !to) return true
-    const inRange = (d?: string | null) => {
-      if (!d) return false
-      const day = d.slice(0, 10)
-      if (from && day < from) return false
-      if (to && day > to) return false
-      return true
-    }
-    return inRange(b.date) || inRange(b.createdAt)
+    const d = (dateField === 'created' ? b.createdAt : b.date)
+    if (!d) return false
+    const day = d.slice(0, 10)
+    if (from && day < from) return false
+    if (to && day > to) return false
+    return true
   }
   const filtered = bookings.filter(b => matchTab(b, tab) && matchName(b) && matchDate(b))
 
@@ -306,7 +321,7 @@ function ReservationsView() {
           <option value="">전체 병원</option>
           {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
         </select>
-        <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} />
+        <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
