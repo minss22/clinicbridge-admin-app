@@ -520,7 +520,7 @@ function ReservationsView() {
         <div>
           {/* 컬럼 헤더 */}
           <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
-            {RES_HEADERS.map(h => <div key={h} style={headCell}>{h}</div>)}
+            {RES_HEADERS.map((h, i) => <div key={h} style={{ ...headCell, textAlign: RES_ALIGN[i] }}>{h}</div>)}
           </div>
           {/* 카드 목록 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
@@ -538,6 +538,8 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 // 예약 "표처럼 보이는 카드" 레이아웃 — 헤더와 카드가 같은 그리드 컬럼을 공유
 const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '희망 예산', '시술이력', '상태', '접수일자']
 const RES_GRID = '128px 92px minmax(110px,1.3fr) 104px 52px 62px minmax(120px,1.3fr) 100px minmax(96px,1fr) 96px 96px'
+// 자유 텍스트(희망시술/희망예산/시술이력)만 좌측, 나머지는 중앙 정렬
+const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'left', 'left', 'center', 'center']
 const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 const cellBase: React.CSSProperties = { fontSize: 13, color: '#333', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 const actionCard = (bg: string, border: string): React.CSSProperties => ({ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: '10px 14px' })
@@ -635,19 +637,17 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
   // 한 사람(예약자/동반자)을 그리드 한 줄로 — 헤더와 컬럼 정렬 일치
   const personRow = (p: Person, isComp: boolean, idx = 0) => (
     <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#FBFBFB', borderTop: '1px solid #F2F2F2' } : {}) }}>
-      {cell(isComp ? '' : <b>{dot(b.date)} {b.time}</b>)}
-      {cell(isComp ? '' : b.branchName, { color: '#555' })}
-      {cell(isComp
-        ? <span style={{ color: '#666' }}>↳ 동반자 {idx + 1} · <b style={{ color: '#222' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>
-        : <span><b style={{ color: '#111' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>)}
-      {cell(p.birthDate || '-', { color: '#555' })}
-      {cell(genderKo(p.gender), { color: '#555' })}
-      {cell(<VisitPill v={p.visitType} />, { overflow: 'visible' })}
+      {cell(isComp ? <span style={{ color: '#888', fontWeight: 700, fontSize: 12 }}>동반자 {idx + 1}</span> : <b>{dot(b.date)} {b.time}</b>, { textAlign: 'center' })}
+      {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center' })}
+      {cell(<span><b style={{ color: isComp ? '#222' : '#111' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>, { textAlign: 'center' })}
+      {cell(p.birthDate || '-', { color: '#555', textAlign: 'center' })}
+      {cell(genderKo(p.gender), { color: '#555', textAlign: 'center' })}
+      {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
-      {cell(p.budget || '-', { color: '#555' })}
+      {cell(p.budget || '-', { color: '#555', whiteSpace: 'normal' })}
       {cell(p.surgeryHistory || '-', { color: '#555', whiteSpace: 'normal' })}
-      {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />, { overflow: 'visible' })}
-      {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888' })}
+      {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
+      {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
     </div>
   )
 
