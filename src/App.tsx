@@ -542,7 +542,8 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 // 예약 표 스타일
 const thStyle: React.CSSProperties = { textAlign: 'left', padding: '11px 14px', fontSize: 12, fontWeight: 700, color: '#888', borderBottom: '1px solid #EEE', whiteSpace: 'nowrap', background: '#FAFAFA' }
 const tdStyle: React.CSSProperties = { padding: '12px 14px', borderBottom: '1px solid #F2F2F2', verticalAlign: 'middle', color: '#333', whiteSpace: 'nowrap' }
-const actionBar = (bg: string): React.CSSProperties => ({ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: bg, borderTop: '1px solid #EEE' })
+const actionCard = (bg: string, border: string): React.CSSProperties => ({ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: '10px 14px' })
+const actionRowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 }
 const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
 const rejectBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
 const proposeBtn: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px dashed #F6A623', background: '#fff', color: '#B45309', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
@@ -653,20 +654,22 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
   )
 
   const actionContent = isClinicProposed(b) ? (
-    <div style={actionBar('#FFF7ED')}>
-      <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#9A3412' }}>🕒 시간 제안함 · 고객 응답 대기 → {dot(b.requestedDate)} ({b.proposedTimes.join(', ')})</span>
-      <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>제안 취소(거절)</button>
+    <div style={actionCard('#FFF7ED', '#FED7AA')}>
+      <div style={actionRowFlex}>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#9A3412' }}>🕒 시간 제안함 · 고객 응답 대기 → {dot(b.requestedDate)} ({b.proposedTimes.join(', ')})</span>
+        <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>제안 취소(거절)</button>
+      </div>
     </div>
   ) : (isReschedulePending(b) || isNewPending(b)) ? (
-    <>
-      <div style={actionBar('#FFFBEB')}>
+    <div style={actionCard('#FFFBEB', '#FDE68A')}>
+      <div style={actionRowFlex}>
         <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
         <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={confirmBtn}>확정</button>
         <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>거절</button>
         {!proposing && <button onClick={() => setProposing(true)} style={proposeBtn}>🕒 다른 시간 제안</button>}
       </div>
       {proposing && (
-        <div style={{ padding: '10px 14px', background: '#FFF7ED', borderTop: '1px solid #EEE', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #FDE68A', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9A3412' }}>{dot(targetDate)} · 제안할 시간 선택 (여러 개)</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {slots.length === 0 && <span style={{ fontSize: 12.5, color: '#999' }}>가능한 시간이 없습니다.</span>}
@@ -680,15 +683,17 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
           </div>
         </div>
       )}
-    </>
+    </div>
   ) : null
 
   const companionBatchRows = b.booker.status === 'confirmed'
     ? compBatches.map((batch, i) => (
-        <div key={i} style={actionBar('#ECFDF5')}>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#065F46' }}>➕ 동반자 추가 승인 대기: {batch.map(c => c.nameKo || c.name).join(', ')}</span>
-          <button disabled={busy === batch[0].id} onClick={() => act('confirm', batch[0].id)} style={confirmBtn}>확정</button>
-          <button disabled={busy === batch[0].id} onClick={() => act('reject', batch[0].id)} style={rejectBtn}>거절</button>
+        <div key={i} style={actionCard('#ECFDF5', '#A7F3D0')}>
+          <div style={actionRowFlex}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#065F46' }}>➕ 동반자 추가 승인 대기: {batch.map(c => c.nameKo || c.name).join(', ')}</span>
+            <button disabled={busy === batch[0].id} onClick={() => act('confirm', batch[0].id)} style={confirmBtn}>확정</button>
+            <button disabled={busy === batch[0].id} onClick={() => act('reject', batch[0].id)} style={rejectBtn}>거절</button>
+          </div>
         </div>
       ))
     : []
@@ -700,7 +705,9 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
       <tr>{personCells(b.booker, false)}</tr>
       {b.companions.map((c, i) => <tr key={c.id} style={{ background: '#FCFCFC' }}>{personCells(c, true, i)}</tr>)}
       {hasAction && (
-        <tr><td colSpan={11} style={{ padding: 0 }}>{actionContent}{companionBatchRows}</td></tr>
+        <tr><td colSpan={11} style={{ padding: '8px 14px 14px', borderBottom: '1px solid #F2F2F2' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{actionContent}{companionBatchRows}</div>
+        </td></tr>
       )}
     </>
   )
