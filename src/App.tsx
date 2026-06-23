@@ -405,7 +405,6 @@ function ReservationsView() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [tab, setTab] = useState<Tab>('action')
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState<string | null>(null)
   const [query, setQuery] = useState('')      // 이름 검색
   const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
   const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
@@ -436,19 +435,6 @@ function ReservationsView() {
     document.addEventListener('visibilitychange', tick)
     return () => { clearInterval(iv); window.removeEventListener('focus', tick); document.removeEventListener('visibilitychange', tick) }
   }, [branchId])
-
-  const act = async (kind: 'confirm' | 'reject', reservationId: string) => {
-    if (!confirm(kind === 'confirm' ? '확정하시겠습니까? (고객에게 알림이 갑니다)' : '거절하시겠습니까? (고객에게 알림이 갑니다)')) return
-    setBusy(reservationId)
-    try {
-      await (kind === 'confirm' ? adminApi.confirm(reservationId) : adminApi.reject(reservationId))
-      await load()
-    } catch (e: any) {
-      alert(e?.message || '처리에 실패했습니다')
-    } finally {
-      setBusy(null)
-    }
-  }
 
   const matchTab = (b: Booking, key: Tab) => {
     if (key === 'action') return needsAction(b)
@@ -524,7 +510,7 @@ function ReservationsView() {
           </div>
           {/* 카드 목록 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-            {filtered.map(b => <BookingRows key={b.groupId} b={b} busy={busy} act={act} reload={() => load(true)} />)}
+            {filtered.map(b => <BookingRows key={b.groupId} b={b} />)}
           </div>
         </div>
       )}
@@ -542,12 +528,6 @@ const RES_GRID = '128px 92px minmax(110px,1.3fr) 104px 52px 62px minmax(120px,1.
 const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'left', 'left', 'center', 'center']
 const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 const cellBase: React.CSSProperties = { fontSize: 13, color: '#333', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-const actionCard = (bg: string, border: string): React.CSSProperties => ({ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: '10px 14px' })
-const actionRowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 }
-const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
-const rejectBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
-const proposeBtn: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px dashed #F6A623', background: '#fff', color: '#B45309', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
-
 function VisitPill({ v }: { v: string }) {
   const isFirst = v === 'first'
   return <span style={{
@@ -608,30 +588,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span style={{ padding: '3px 10px', borderRadius: 10, background: c.bg, color: c.fg, fontSize: 12, fontWeight: 700 }}>{STATUS_KO[status] ?? status}</span>
 }
 
-function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; reload: () => void }) {
-  const compBatches = pendingCompanionBatches(b)
-  const [proposing, setProposing] = useState(false)
-  const [slots, setSlots] = useState<{ time: string; available: boolean }[]>([])
-  const [picked, setPicked] = useState<string[]>([])
-  const [pBusy, setPBusy] = useState(false)
-  // 제안 대상 날짜: 시간변경 요청이면 고객이 원한 날짜, 아니면 기존 예약 날짜
-  const targetDate = isReschedulePending(b) ? (b.requestedDate || b.date) : b.date
-
-  useEffect(() => {
-    if (!proposing) return
-    adminApi.getSlots(b.branchId, targetDate).then(setSlots).catch(() => setSlots([]))
-  }, [proposing])
-
-  const toggle = (t: string) => setPicked(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
-  const submitPropose = async () => {
-    if (!picked.length) { alert('제안할 시간을 1개 이상 선택하세요'); return }
-    setPBusy(true)
-    try { await adminApi.propose(b.booker.id, targetDate, picked); setProposing(false); setPicked([]); reload() }
-    catch (e: any) { alert(e?.message || '제안 실패') }
-    finally { setPBusy(false) }
-  }
-
-  const disabled = busy === b.booker.id
+function BookingRows({ b }: { b: Booking }) {
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
 
   // 한 사람(예약자/동반자)을 그리드 한 줄로 — 헤더와 컬럼 정렬 일치
@@ -651,60 +608,10 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
     </div>
   )
 
-  const actionContent = isClinicProposed(b) ? (
-    <div style={actionCard('#FFF7ED', '#FED7AA')}>
-      <div style={actionRowFlex}>
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#9A3412' }}>🕒 시간 제안함 · 고객 응답 대기 → {dot(b.requestedDate)} ({b.proposedTimes.join(', ')})</span>
-        <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>제안 취소(거절)</button>
-      </div>
-    </div>
-  ) : (isReschedulePending(b) || isNewPending(b)) ? (
-    <div style={actionCard('#FFFBEB', '#FDE68A')}>
-      <div style={actionRowFlex}>
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
-        <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={confirmBtn}>확정</button>
-        <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>거절</button>
-        {!proposing && <button onClick={() => setProposing(true)} style={proposeBtn}>🕒 다른 시간 제안</button>}
-      </div>
-      {proposing && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #FDE68A', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9A3412' }}>{dot(targetDate)} · 제안할 시간 선택 (여러 개)</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {slots.length === 0 && <span style={{ fontSize: 12.5, color: '#999' }}>가능한 시간이 없습니다.</span>}
-            {slots.map(s => { const on = picked.includes(s.time); return (
-              <button key={s.time} onClick={() => toggle(s.time)} style={{ padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#555' }}>{s.time}</button>
-            ) })}
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button disabled={pBusy} onClick={submitPropose} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: '#F6A623', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: pBusy ? 0.5 : 1 }}>{pBusy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
-            <button disabled={pBusy} onClick={() => { setProposing(false); setPicked([]) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 13, cursor: 'pointer' }}>취소</button>
-          </div>
-        </div>
-      )}
-    </div>
-  ) : null
-
-  const companionBatchRows = b.booker.status === 'confirmed'
-    ? compBatches.map((batch, i) => (
-        <div key={i} style={actionCard('#ECFDF5', '#A7F3D0')}>
-          <div style={actionRowFlex}>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#065F46' }}>➕ 동반자 추가 승인 대기: {batch.map(c => c.nameKo || c.name).join(', ')}</span>
-            <button disabled={busy === batch[0].id} onClick={() => act('confirm', batch[0].id)} style={confirmBtn}>확정</button>
-            <button disabled={busy === batch[0].id} onClick={() => act('reject', batch[0].id)} style={rejectBtn}>거절</button>
-          </div>
-        </div>
-      ))
-    : []
-
-  const hasAction = !!actionContent || companionBatchRows.length > 0
-
   return (
     <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
       {personRow(b.booker, false)}
       {b.companions.map((c, i) => personRow(c, true, i))}
-      {hasAction && (
-        <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>{actionContent}{companionBatchRows}</div>
-      )}
     </div>
   )
 }
