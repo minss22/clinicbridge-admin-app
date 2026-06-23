@@ -100,6 +100,8 @@ export const adminApi = {
   getCustomers: (): Promise<Customer[]> => adminGet('admin-customers'),
   getCustomerReservations: (lineUserId: string): Promise<Booking[]> =>
     adminGet('admin-customer-reservations', { lineUserId }),
+  updateCustomerNameKo: (lineUserId: string, nameKo: string) =>
+    adminPost('admin-customer-update', { lineUserId, nameKo }),
 
   // 매니저 예약 처리 (로그인 없음 · 알림 링크로 진입)
   getManagerProposeInfo: (reservationId: string): Promise<ManagerProposeInfo> =>

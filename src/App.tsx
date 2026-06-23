@@ -872,17 +872,48 @@ function CustomersView() {
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Customer | null>(null)
   const [resv, setResv] = useState<Booking[] | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => { adminApi.getCustomers().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }, [])
   const open = async (c: Customer) => {
-    setSel(c); setResv(null)
+    setSel(c); setResv(null); setEditing(false)
     try { setResv(await adminApi.getCustomerReservations(c.lineUserId)) } catch { setResv([]) }
+  }
+  const saveNameKo = async () => {
+    if (!sel) return
+    setSaving(true)
+    try {
+      await adminApi.updateCustomerNameKo(sel.lineUserId, draft)
+      const v = draft.trim()
+      setSel({ ...sel, nameKo: v })
+      setList(prev => prev.map(c => c.lineUserId === sel.lineUserId ? { ...c, nameKo: v } : c))
+      try { setResv(await adminApi.getCustomerReservations(sel.lineUserId)) } catch { /* 예약 카드 갱신 실패는 무시 */ }
+      setEditing(false)
+    } catch (e: any) { alert(e?.message || '수정에 실패했습니다') }
+    finally { setSaving(false) }
   }
 
   if (sel) return (
     <div style={{ margin: '16px 0' }}>
-      <button onClick={() => setSel(null)} style={ghostBtn}>← 목록</button>
-      <h2 style={{ fontSize: 17, margin: '10px 0 2px' }}>{sel.nameKo || sel.name || '(이름없음)'} <span style={{ fontSize: 13, color: '#aaa', fontWeight: 400 }}>{sel.name}</span></h2>
+      <button onClick={() => { setSel(null); setEditing(false) }} style={ghostBtn}>← 목록</button>
+      {editing ? (
+        <div style={{ margin: '12px 0' }}>
+          <label style={{ fontSize: 12.5, color: '#666', fontWeight: 600 }}>한국식 이름</label>
+          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            <input value={draft} onChange={e => setDraft(e.target.value)} autoFocus style={{ flex: 1, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
+            <button disabled={saving} onClick={saveNameKo} style={{ ...primaryBtn, opacity: saving ? 0.6 : 1 }}>{saving ? '저장 중…' : '저장'}</button>
+            <button disabled={saving} onClick={() => setEditing(false)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>취소</button>
+          </div>
+          <div style={{ fontSize: 11.5, color: '#aaa', marginTop: 4 }}>로마자: {sel.name || '-'} (수정 불가)</div>
+        </div>
+      ) : (
+        <h2 style={{ fontSize: 17, margin: '10px 0 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {sel.nameKo || sel.name || '(이름없음)'} <span style={{ fontSize: 13, color: '#aaa', fontWeight: 400 }}>{sel.name}</span>
+          <button onClick={() => { setDraft(sel.nameKo || ''); setEditing(true) }} style={{ fontSize: 12, fontWeight: 600, color: '#1D9E75', background: 'none', border: '1px solid #1D9E75', borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>한국식 이름 수정</button>
+        </h2>
+      )}
       <div style={{ fontSize: 12.5, color: '#888', marginBottom: 14 }}>{sel.birthDate || '-'} · {genderKo(sel.gender)} · 등록 {dot((sel.createdAt || '').slice(0, 10))}</div>
       {resv === null ? <Center small>불러오는 중…</Center>
         : resv.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>예약 내역이 없습니다.</p>
