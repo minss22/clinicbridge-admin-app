@@ -965,7 +965,7 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
               border: `1.5px solid ${selected ? '#111' : 'transparent'}`,
               background: closed ? '#FEE2E2' : 'transparent',
               color: closed ? '#B91C1C' : isHol ? '#E53E3E' : '#333', fontWeight: closed ? 700 : 400,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
             }}>
               <span>{Number(ds.slice(8))}</span>
               {isHol && <span style={{ fontSize: 8.5, lineHeight: 1.05, color: '#E53E3E', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{holidays.get(ds)}</span>}
