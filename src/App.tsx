@@ -914,10 +914,10 @@ function Row({ k, v }: { k: string; v?: string | null }) {
 const navBtnB: React.CSSProperties = { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#555', padding: '0 8px' }
 function DayRow({ value, onToggle }: { value: number[]; onToggle: (d: number) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: 6 }}>
       {WEEKDAYS.map((w, d) => {
         const on = value.includes(d)
-        return <button type="button" key={d} onClick={() => onToggle(d)} style={{ width: 38, height: 38, borderRadius: 8, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#666', fontSize: 13, fontWeight: 600 }}>{w}</button>
+        return <button type="button" key={d} onClick={() => onToggle(d)} style={{ flex: 1, minWidth: 0, height: 38, borderRadius: 8, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#666', fontSize: 13, fontWeight: 600 }}>{w}</button>
       })}
     </div>
   )
