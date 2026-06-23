@@ -864,12 +864,9 @@ function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack
   return (
     <div style={{ margin: '16px 0' }}>
       <button onClick={onBack} style={ghostBtn}>← 목록</button>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '10px 0 16px' }}>
-        <div>
-          <h2 style={{ fontSize: 20, margin: 0 }}>{b.name}</h2>
-          <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{b.nameJa}</div>
-        </div>
-        <button onClick={onEdit} style={primaryBtn}>수정</button>
+      <div style={{ margin: '10px 0 16px' }}>
+        <h2 style={{ fontSize: 20, margin: 0 }}>{b.name}</h2>
+        <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{b.nameJa}</div>
       </div>
 
       <div style={cardStyle}>
@@ -881,7 +878,10 @@ function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack
       </div>
 
       <div style={cardStyle}>
-        <div style={sectionTitle}>기본 정보</div>
+        <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span>기본 정보</span>
+          <button onClick={onEdit} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #1D9E75', background: '#fff', color: '#1D9E75', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>수정</button>
+        </div>
         <Row k="병원 ID" v={b.branchId} />
         <Row k="주소 (한국어)" v={b.address} />
         <Row k="주소 (일본어)" v={b.addressJa} />
@@ -899,12 +899,6 @@ function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack
         <Lbl>점심 없는 요일</Lbl><DayRow value={sched.noLunchDays} onToggle={d => toggleDay('noLunchDays', d)} />
         <Lbl>휴무일 / 마감 시간 (캘린더)</Lbl>
         <BranchCalendar b={bCal} holidays={holidays} onToggleHoliday={toggleHoliday} onToggleBlocked={toggleBlocked} />
-      </div>
-
-      <div style={cardStyle}>
-        <div style={sectionTitle}>알림 설정</div>
-        <Row k="매니저 LINE ID" v={b.lineNotifyId || '미설정'} />
-        <Row k="채널 토큰" v={b.channelAccessToken ? '설정됨' : '전역 토큰 사용'} />
       </div>
     </div>
   )
@@ -1053,8 +1047,10 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
       </div>
       <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감 {b.closeBufferMin || 0}분 · 점심 시작 {b.lunchBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
       <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 10 }}>※ 휴무 요일·휴무일·마감 시간은 병원 상세 페이지에서 바로 설정할 수 있습니다.</div>
-      <Lbl>매니저 LINE ID (알림 수신)</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
-      <Lbl>채널 액세스 토큰 (병원별 푸시)</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
+      <Lbl>매니저 LINE ID</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
+      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 4 }}>예약 알림을 받을 매니저의 LINE userId (U로 시작하는 33자)</div>
+      <Lbl>채널 액세스 토큰</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
+      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 4 }}>이 병원 LINE 공식계정의 Messaging API 토큰. 비우면 전역 토큰 사용</div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
         <button disabled={busy} onClick={save} style={{ ...primaryBtn, flex: 1, padding: '12px' }}>{busy ? '저장 중…' : '저장'}</button>
