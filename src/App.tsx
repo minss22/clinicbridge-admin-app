@@ -120,25 +120,27 @@ function Login() {
 }
 
 // ── 대시보드 ──────────────────────────────────────────────────
-type Tab = 'pending' | 'reschedule' | 'proposed' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
+type Tab = 'action' | 'pending' | 'proposed' | 'reschedule' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
 const TABS: { key: Tab; label: string }[] = [
+  { key: 'action', label: '처리 대기' },          // 대기+시간조정중+일시변경요청 묶음
   { key: 'pending', label: '대기' },
-  { key: 'reschedule', label: '일시변경 요청' },
   { key: 'proposed', label: '시간 조정 중' },
+  { key: 'reschedule', label: '일시변경 요청' },
   { key: 'confirmed', label: '확정' },
   { key: 'rejected', label: '거절' },
   { key: 'cancelled', label: '취소' },
   { key: 'all', label: '전체' },
 ]
-// 탭별 색 (배경=연한 색 / 글씨=상태 색). all=중립색.
+// 탭별 색 (배경=연한 색 / 글씨=상태 색). 전체=초록 배경+흰 글씨(활성).
 const TAB_COLOR: Record<Tab, { bg: string; fg: string }> = {
+  action: STATUS_COLOR.pending,
   pending: STATUS_COLOR.pending,
-  reschedule: STATUS_COLOR.reschedule_req,
   proposed: STATUS_COLOR.rescheduling,
+  reschedule: STATUS_COLOR.reschedule_req,
   confirmed: STATUS_COLOR.confirmed,
   rejected: STATUS_COLOR.rejected,
   cancelled: STATUS_COLOR.cancelled,
-  all: { bg: '#EEF2F7', fg: '#475569' },
+  all: { bg: '#1D9E75', fg: '#fff' },
 }
 
 function pendingCompanionBatches(b: Booking): Person[][] {
@@ -408,7 +410,7 @@ function ReservationsView() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
   const [bookings, setBookings] = useState<Booking[]>([])
-  const [tab, setTab] = useState<Tab>('pending')
+  const [tab, setTab] = useState<Tab>('action')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)  // 거절 대상(메시지 모달)
@@ -474,7 +476,9 @@ function ReservationsView() {
   }
 
   const matchTab = (b: Booking, key: Tab) => {
-    if (key === 'pending') return isNewPending(b) || (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
+    const hasCompanionPending = b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0
+    if (key === 'action') return isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) || hasCompanionPending
+    if (key === 'pending') return isNewPending(b) || hasCompanionPending
     if (key === 'reschedule') return isReschedulePending(b)
     if (key === 'proposed') return isClinicProposed(b)
     if (key === 'all') return true
