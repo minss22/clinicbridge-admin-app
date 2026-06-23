@@ -777,8 +777,26 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 const emptyBranch = (): AdminBranch => ({
   branchId: '', name: '', nameJa: '', address: '', addressJa: '',
   openTime: '', closeTime: '', lunchStart: '', lunchEnd: '',
-  closedDays: [], noLunchDays: [], holidayDates: [], lineNotifyId: '', channelAccessToken: '',
+  closedDays: [], noLunchDays: [], holidayDates: [], bookingBufferMin: 90, blockedSlots: [],
+  lineNotifyId: '', channelAccessToken: '',
 })
+// 폼 값으로 특정 날짜의 시간 슬롯 계산 (백엔드 computeSlots와 동일 규칙)
+const toMinC = (t?: string) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m }
+const minToHHMMc = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+function computeSlotsClient(b: AdminBranch, date: string): string[] {
+  const dow = new Date(date + 'T00:00:00Z').getUTCDay()
+  if (b.closedDays.includes(dow)) return []
+  const open = toMinC(b.openTime), close = toMinC(b.closeTime)
+  if (open == null || close == null) return []
+  const buffer = b.bookingBufferMin ?? 90
+  const ls = toMinC(b.lunchStart), le = toMinC(b.lunchEnd)
+  const noLunch = b.noLunchDays.includes(dow)
+  const times: string[] = []
+  const add = (from: number, to: number) => { for (let t = from; t <= to; t += 30) times.push(minToHHMMc(t)) }
+  if (ls != null && le != null && !noLunch) { add(open, ls - buffer); add(le, close - buffer) }
+  else add(open, close - buffer)
+  return times
+}
 function Lbl({ children }: { children: React.ReactNode }) {
   return <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#666', margin: '12px 0 4px' }}>{children}</label>
 }
@@ -857,9 +875,11 @@ function BranchDetail({ b, onBack, onEdit }: { b: AdminBranch; onBack: () => voi
         <div style={sectionTitle}>영업 / 휴무</div>
         <Row k="영업시간" v={`${b.openTime || '-'} ~ ${b.closeTime || '-'}`} />
         <Row k="점심시간" v={b.lunchStart ? `${b.lunchStart} ~ ${b.lunchEnd || '-'}` : '없음'} />
+        <Row k="예약 마감 버퍼" v={`마감·점심 ${b.bookingBufferMin ?? 90}분 전까지`} />
         <Row k="휴무 요일" v={days(b.closedDays)} />
         <Row k="점심 없는 요일" v={days(b.noLunchDays)} />
-        <Row k="추가 휴무일" v={b.holidayDates.length ? b.holidayDates.join(', ') : '없음 (한국 공휴일 자동 적용)'} />
+        <Row k="지정 휴무일" v={b.holidayDates.length ? `${b.holidayDates.length}일` : '없음'} />
+        <Row k="마감한 시간" v={b.blockedSlots.length ? `${b.blockedSlots.length}건` : '없음'} />
       </div>
 
       <div style={cardStyle}>
@@ -880,19 +900,107 @@ function Row({ k, v }: { k: string; v?: string | null }) {
   )
 }
 
+const navBtnB: React.CSSProperties = { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#555', padding: '0 8px' }
+// 휴무일(전체) + 마감 시간(개별)을 캘린더로 설정. 공휴일은 표시만(자동 휴무 X).
+function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
+  b: AdminBranch; holidays: Set<string>
+  onToggleHoliday: (date: string) => void
+  onToggleBlocked: (date: string, time: string) => void
+}) {
+  const [ym, setYm] = useState(new Date().toISOString().slice(0, 7))
+  const [sel, setSel] = useState<string | null>(null)
+  const [y, m] = ym.split('-').map(Number)
+  const startDow = new Date(y, m - 1, 1).getDay()
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const cells: (string | null)[] = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
+  const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); setYm(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
+  const closedSet = new Set(b.holidayDates)
+  const selSlots = sel ? computeSlotsClient(b, sel) : []
+
+  return (
+    <div style={{ border: '1px solid #E5E7EB', borderRadius: 12, padding: 12, marginTop: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <button type="button" onClick={() => shift(-1)} style={navBtnB}>‹</button>
+        <b style={{ fontSize: 14 }}>{y}년 {m}월</b>
+        <button type="button" onClick={() => shift(1)} style={navBtnB}>›</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+        {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 11, color: i === 0 ? '#E53E3E' : i === 6 ? '#3B82F6' : '#999' }}>{d}</div>)}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {cells.map((ds, i) => {
+          if (!ds) return <div key={i} />
+          const closed = closedSet.has(ds)
+          const isHol = holidays.has(ds)
+          const hasBlocked = b.blockedSlots.some(s => s.startsWith(ds + ' '))
+          const selected = sel === ds
+          return (
+            <button type="button" key={i} onClick={() => setSel(ds)} style={{
+              position: 'relative', padding: '8px 0', borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
+              border: `1.5px solid ${selected ? '#111' : 'transparent'}`,
+              background: closed ? '#FEE2E2' : 'transparent',
+              color: closed ? '#B91C1C' : isHol ? '#E53E3E' : '#333', fontWeight: closed ? 700 : 400,
+            }}>
+              {Number(ds.slice(8))}
+              {isHol && !closed && <span style={{ position: 'absolute', top: 2, right: 4, width: 4, height: 4, borderRadius: 999, background: '#E53E3E' }} />}
+              {hasBlocked && !closed && <span style={{ position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: 999, background: '#F6A623' }} />}
+            </button>
+          )
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}><span style={{ color: '#E53E3E' }}>●</span> 공휴일 &nbsp; <span style={{ color: '#F6A623' }}>●</span> 일부 시간 마감 &nbsp; <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0 4px', borderRadius: 4 }}>휴무</span></div>
+
+      {sel && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #EEE' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <b style={{ fontSize: 13.5 }}>{sel.replace(/-/g, '.')}{holidays.has(sel) && <span style={{ color: '#E53E3E', fontSize: 12, marginLeft: 6 }}>공휴일</span>}</b>
+            <button type="button" onClick={() => onToggleHoliday(sel)} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${closedSet.has(sel) ? '#E53E3E' : '#DDD'}`, background: closedSet.has(sel) ? '#E53E3E' : '#fff', color: closedSet.has(sel) ? '#fff' : '#666' }}>
+              {closedSet.has(sel) ? '휴무 해제' : '이 날 휴무'}
+            </button>
+          </div>
+          {closedSet.has(sel) ? (
+            <p style={{ fontSize: 12.5, color: '#B91C1C', margin: 0 }}>이 날은 전체 휴무입니다.</p>
+          ) : selSlots.length === 0 ? (
+            <p style={{ fontSize: 12.5, color: '#999', margin: 0 }}>영업시간을 설정하면 시간이 표시됩니다.</p>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>마감할 시간을 선택하세요 (회색 = 마감)</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {selSlots.map(t => {
+                  const blocked = b.blockedSlots.includes(`${sel} ${t}`)
+                  return <button type="button" key={t} onClick={() => onToggleBlocked(sel, t)} style={{ padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${blocked ? '#DDD' : '#1D9E75'}`, background: blocked ? '#F3F4F6' : '#fff', color: blocked ? '#BBB' : '#1D9E75', textDecoration: blocked ? 'line-through' : 'none' }}>{t}</button>
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNew: boolean; onClose: () => void; onSaved: () => void }) {
   const [b, setB] = useState<AdminBranch>(init)
-  const [holidayText, setHolidayText] = useState((init.holidayDates || []).join(', '))
+  const [holidays, setHolidays] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Set(h))).catch(() => {}) }, [])
   const set = (k: keyof AdminBranch, v: any) => setB(prev => ({ ...prev, [k]: v }))
   const toggleDay = (key: 'closedDays' | 'noLunchDays', d: number) =>
     setB(prev => ({ ...prev, [key]: prev[key].includes(d) ? prev[key].filter(x => x !== d) : [...prev[key], d] }))
+  const toggleHoliday = (date: string) =>
+    setB(prev => ({ ...prev, holidayDates: prev.holidayDates.includes(date) ? prev.holidayDates.filter(x => x !== date) : [...prev.holidayDates, date] }))
+  const toggleBlocked = (date: string, time: string) => {
+    const key = `${date} ${time}`
+    setB(prev => ({ ...prev, blockedSlots: prev.blockedSlots.includes(key) ? prev.blockedSlots.filter(x => x !== key) : [...prev.blockedSlots, key] }))
+  }
 
   const save = async () => {
     if (!b.branchId.trim()) { alert('병원 ID를 입력하세요'); return }
     setBusy(true)
     try {
-      await adminApi.saveBranch({ ...b, holidayDates: holidayText.split(',').map(s => s.trim()).filter(Boolean) })
+      await adminApi.saveBranch(b)
       onSaved()
     } catch (e: any) { alert(e?.message || '저장 실패') } finally { setBusy(false) }
   }
@@ -931,11 +1039,15 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
         <div style={{ flex: 1 }}><Lbl>점심 종료</Lbl><Txt type="time" value={b.lunchEnd} onChange={v => set('lunchEnd', v)} /></div>
       </div>
 
+      <Lbl>예약 마감 버퍼 (분)</Lbl>
+      <Txt type="number" value={String(b.bookingBufferMin)} onChange={v => set('bookingBufferMin', Number(v) || 0)} placeholder="90" />
+      <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감·점심 시작 {b.bookingBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
+
       <Lbl>휴무 요일</Lbl>{dayRow('closedDays')}
       <Lbl>점심 없는 요일</Lbl>{dayRow('noLunchDays')}
-      <Lbl>병원별 추가 휴무일 (쉼표 구분, YYYY-MM-DD)</Lbl>
-      <Txt value={holidayText} onChange={setHolidayText} placeholder="2026-05-10, 2026-08-20" />
-      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 4 }}>※ 한국 공휴일(대체공휴일 포함)은 자동으로 휴무 처리됩니다. 여기엔 병원 사정으로 쉬는 날만 추가하세요.</div>
+
+      <Lbl>휴무일 / 마감 시간 (캘린더)</Lbl>
+      <BranchCalendar b={b} holidays={holidays} onToggleHoliday={toggleHoliday} onToggleBlocked={toggleBlocked} />
       <Lbl>매니저 LINE ID (알림 수신)</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
       <Lbl>채널 액세스 토큰 (병원별 푸시)</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
 

@@ -63,6 +63,7 @@ export type AdminBranch = {
   branchId: string; name: string; nameJa: string; address: string; addressJa: string
   openTime: string; closeTime: string; lunchStart: string; lunchEnd: string
   closedDays: number[]; noLunchDays: number[]; holidayDates: string[]
+  bookingBufferMin: number; blockedSlots: string[]
   lineNotifyId: string; channelAccessToken: string
 }
 export type Customer = {
@@ -93,6 +94,7 @@ export const adminApi = {
 
   // 병원 관리
   getAdminBranches: (): Promise<AdminBranch[]> => adminGet('admin-branches-full'),
+  getHolidays: (): Promise<string[]> => adminGet('admin-holidays'),
   saveBranch: (branch: AdminBranch) => adminPost('admin-branch-save', { branch }),
   deleteBranch: (branchId: string) => adminPost('admin-branch-delete', { branchId }),
 
