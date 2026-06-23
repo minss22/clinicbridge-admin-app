@@ -687,22 +687,38 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
         <>
           <div style={actionBar('#FFFBEB')}>
             <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
-            <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={confirmBtn}>확정</button>
-            <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>거절</button>
-            {!proposing && <button onClick={() => setProposing(true)} style={proposeBtn}>🕒 다른 시간 제안</button>}
+            {!proposing ? (
+              <>
+                <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={confirmBtn}>확정</button>
+                <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>거절</button>
+                <button onClick={() => setProposing(true)} style={proposeBtn}>🕒 다른 시간 제안</button>
+              </>
+            ) : (
+              <>
+                <button disabled={pBusy} onClick={submitPropose} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#F6A623', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: pBusy ? 0.5 : 1, whiteSpace: 'nowrap' }}>{pBusy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+                <button disabled={pBusy} onClick={() => { setProposing(false); setPicked([]) }} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>취소</button>
+              </>
+            )}
           </div>
           {proposing && (
             <div style={{ ...actionBar('#FFF7ED'), flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9A3412' }}>{dot(targetDate)} · 제안할 시간 선택 (여러 개)</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {slots.length === 0 && <span style={{ fontSize: 12.5, color: '#999' }}>가능한 시간이 없습니다.</span>}
-                {slots.map(s => { const on = picked.includes(s.time); return (
-                  <button key={s.time} onClick={() => toggle(s.time)} style={{ padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#555' }}>{s.time}</button>
-                ) })}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button disabled={pBusy} onClick={submitPropose} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: '#F6A623', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: pBusy ? 0.5 : 1 }}>{pBusy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
-                <button disabled={pBusy} onClick={() => { setProposing(false); setPicked([]) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 13, cursor: 'pointer' }}>취소</button>
+                {slots.map(s => {
+                  const on = picked.includes(s.time)
+                  const isOrig = targetDate === b.date && s.time === b.time   // 원래 접수받은 시간
+                  const dis = !s.available || isOrig
+                  return (
+                    <button key={s.time} disabled={dis} onClick={() => !dis && toggle(s.time)} style={{
+                      padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+                      cursor: dis ? 'not-allowed' : 'pointer',
+                      border: `1.5px solid ${on ? '#1D9E75' : dis ? '#EEE' : '#DDD'}`,
+                      background: on ? '#1D9E75' : dis ? '#F3F4F6' : '#fff',
+                      color: on ? '#fff' : dis ? '#BBB' : '#555',
+                    }}>{s.time}</button>
+                  )
+                })}
               </div>
             </div>
           )}
