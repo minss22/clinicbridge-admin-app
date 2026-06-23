@@ -517,19 +517,15 @@ function ReservationsView() {
       ) : filtered.length === 0 ? (
         <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
       ) : (
-        <div style={{ overflowX: 'auto', border: '1px solid #EEE', borderRadius: 12, background: '#fff' }}>
-          <table style={{ width: '100%', tableLayout: 'auto', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr>
-                {['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '희망 예산', '시술이력', '상태', '접수일자'].map(h => (
-                  <th key={h} style={thStyle}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(b => <BookingRows key={b.groupId} b={b} busy={busy} act={act} reload={() => load(true)} />)}
-            </tbody>
-          </table>
+        <div>
+          {/* 컬럼 헤더 */}
+          <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
+            {RES_HEADERS.map(h => <div key={h} style={headCell}>{h}</div>)}
+          </div>
+          {/* 카드 목록 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+            {filtered.map(b => <BookingRows key={b.groupId} b={b} busy={busy} act={act} reload={() => load(true)} />)}
+          </div>
         </div>
       )}
     </div>
@@ -539,9 +535,11 @@ function ReservationsView() {
 const genderKo = (g?: string | null) => (g === 'male' ? '남성' : g === 'female' ? '여성' : (g || '-'))
 const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight: 4 }
 
-// 예약 표 스타일
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '11px 14px', fontSize: 12, fontWeight: 700, color: '#888', borderBottom: '1px solid #EEE', whiteSpace: 'nowrap', background: '#FAFAFA' }
-const tdStyle: React.CSSProperties = { padding: '12px 14px', borderBottom: '1px solid #F2F2F2', verticalAlign: 'middle', color: '#333', whiteSpace: 'nowrap' }
+// 예약 "표처럼 보이는 카드" 레이아웃 — 헤더와 카드가 같은 그리드 컬럼을 공유
+const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '희망 예산', '시술이력', '상태', '접수일자']
+const RES_GRID = '128px 92px minmax(110px,1.3fr) 104px 52px 62px minmax(120px,1.3fr) 100px minmax(96px,1fr) 96px 96px'
+const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+const cellBase: React.CSSProperties = { fontSize: 13, color: '#333', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 const actionCard = (bg: string, border: string): React.CSSProperties => ({ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: '10px 14px' })
 const actionRowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 }
 const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
@@ -632,11 +630,11 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
   }
 
   const disabled = busy === b.booker.id
-  const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <td style={{ ...tdStyle, ...extra }}>{v}</td>
+  const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
 
-  // 한 사람(예약자/동반자)을 표 한 행으로
-  const personCells = (p: Person, isComp: boolean, idx = 0) => (
-    <>
+  // 한 사람(예약자/동반자)을 그리드 한 줄로 — 헤더와 컬럼 정렬 일치
+  const personRow = (p: Person, isComp: boolean, idx = 0) => (
+    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#FBFBFB', borderTop: '1px solid #F2F2F2' } : {}) }}>
       {cell(isComp ? '' : <b>{dot(b.date)} {b.time}</b>)}
       {cell(isComp ? '' : b.branchName, { color: '#555' })}
       {cell(isComp
@@ -644,13 +642,13 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
         : <span><b style={{ color: '#111' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>)}
       {cell(p.birthDate || '-', { color: '#555' })}
       {cell(genderKo(p.gender), { color: '#555' })}
-      {cell(<VisitPill v={p.visitType} />)}
-      {cell(p.treatmentRequest || '-', { whiteSpace: 'normal', minWidth: 120 })}
+      {cell(<VisitPill v={p.visitType} />, { overflow: 'visible' })}
+      {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
       {cell(p.budget || '-', { color: '#555' })}
-      {cell(p.surgeryHistory || '-', { color: '#555', whiteSpace: 'normal', minWidth: 110 })}
-      {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />)}
+      {cell(p.surgeryHistory || '-', { color: '#555', whiteSpace: 'normal' })}
+      {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />, { overflow: 'visible' })}
       {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888' })}
-    </>
+    </div>
   )
 
   const actionContent = isClinicProposed(b) ? (
@@ -701,15 +699,13 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
   const hasAction = !!actionContent || companionBatchRows.length > 0
 
   return (
-    <>
-      <tr>{personCells(b.booker, false)}</tr>
-      {b.companions.map((c, i) => <tr key={c.id} style={{ background: '#FCFCFC' }}>{personCells(c, true, i)}</tr>)}
+    <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+      {personRow(b.booker, false)}
+      {b.companions.map((c, i) => personRow(c, true, i))}
       {hasAction && (
-        <tr><td colSpan={11} style={{ padding: '8px 14px 14px', borderBottom: '1px solid #F2F2F2' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{actionContent}{companionBatchRows}</div>
-        </td></tr>
+        <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>{actionContent}{companionBatchRows}</div>
       )}
-    </>
+    </div>
   )
 }
 
