@@ -6,15 +6,16 @@ import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo
 
 const STATUS_KO: Record<string, string> = {
   pending: '대기', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
-  rescheduling: '시간 조정 중',
+  reschedule_req: '일시변경 요청', rescheduling: '시간 조정 중',
 }
 const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
-  pending:      { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
-  confirmed:    { bg: '#D1FAE5', fg: '#065F46', border: '#6EE7B7' },
-  rejected:     { bg: '#FEE2E2', fg: '#991B1B', border: '#FCA5A5' },
-  cancelled:    { bg: '#F3F4F6', fg: '#6B7280', border: '#E5E7EB' },
-  completed:    { bg: '#E0E7FF', fg: '#3730A3', border: '#C7D2FE' },
-  rescheduling: { bg: '#FFEDD5', fg: '#9A3412', border: '#FDBA74' },
+  pending:        { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
+  confirmed:      { bg: '#D1FAE5', fg: '#065F46', border: '#6EE7B7' },
+  rejected:       { bg: '#FEE2E2', fg: '#991B1B', border: '#FCA5A5' },
+  cancelled:      { bg: '#F3F4F6', fg: '#6B7280', border: '#E5E7EB' },
+  completed:      { bg: '#E0E7FF', fg: '#3730A3', border: '#C7D2FE' },
+  reschedule_req: { bg: '#DBEAFE', fg: '#1E40AF', border: '#93C5FD' },
+  rescheduling:   { bg: '#FFEDD5', fg: '#9A3412', border: '#FDBA74' },
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
@@ -119,19 +120,21 @@ function Login() {
 }
 
 // ── 대시보드 ──────────────────────────────────────────────────
-type Tab = 'action' | 'rescheduling' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
+type Tab = 'pending' | 'reschedule' | 'proposed' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'action', label: '처리 대기' },
-  { key: 'rescheduling', label: '시간 조정 중' },
+  { key: 'pending', label: '대기' },
+  { key: 'reschedule', label: '일시변경 요청' },
+  { key: 'proposed', label: '시간 조정 중' },
   { key: 'confirmed', label: '확정' },
   { key: 'rejected', label: '거절' },
   { key: 'cancelled', label: '취소' },
   { key: 'all', label: '전체' },
 ]
-// 탭별 색 (배경=연한 색 / 글씨=상태 색). action=대기색, all=중립색.
+// 탭별 색 (배경=연한 색 / 글씨=상태 색). all=중립색.
 const TAB_COLOR: Record<Tab, { bg: string; fg: string }> = {
-  action: STATUS_COLOR.pending,
-  rescheduling: STATUS_COLOR.rescheduling,
+  pending: STATUS_COLOR.pending,
+  reschedule: STATUS_COLOR.reschedule_req,
+  proposed: STATUS_COLOR.rescheduling,
   confirmed: STATUS_COLOR.confirmed,
   rejected: STATUS_COLOR.rejected,
   cancelled: STATUS_COLOR.cancelled,
@@ -145,15 +148,12 @@ function pendingCompanionBatches(b: Booking): Person[][] {
   }
   return Object.values(map)
 }
-const isClinicProposed = (b: Booking) => !!b.requestedDate && b.proposedBy === 'clinic'  // 고객 응답 대기
-const isReschedulePending = (b: Booking) => !!b.requestedDate && b.proposedBy !== 'clinic'  // 고객 변경요청 → 병원 처리
-// 예약자 배지에 표시할 상태: 시간 조정(고객 요청/병원 제안) 중이면 'rescheduling'
-const bookerDisplayStatus = (b: Booking) =>
-  (isReschedulePending(b) || isClinicProposed(b)) ? 'rescheduling' : b.booker.status
+const isClinicProposed = (b: Booking) => !!b.requestedDate && b.proposedBy === 'clinic'  // 병원이 시간 제안 → 고객 응답 대기
+const isReschedulePending = (b: Booking) => !!b.requestedDate && b.proposedBy !== 'clinic'  // 고객 일시변경 요청 → 병원 처리
 const isNewPending = (b: Booking) => b.booker.status === 'pending' && !b.requestedDate
-const needsAction = (b: Booking) =>
-  isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) ||
-  (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
+// 예약자 배지 상태: 고객 일시변경 요청='일시변경 요청', 병원 제안 대기='시간 조정 중'
+const bookerDisplayStatus = (b: Booking) =>
+  isReschedulePending(b) ? 'reschedule_req' : isClinicProposed(b) ? 'rescheduling' : b.booker.status
 
 // 매니저 예약 처리 페이지 (로그인 없음 · LINE 알림의 단일 버튼으로 진입)
 // 한 화면에서 확정 / 거절 / 다른 시간 제안.
@@ -408,7 +408,7 @@ function ReservationsView() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
   const [bookings, setBookings] = useState<Booking[]>([])
-  const [tab, setTab] = useState<Tab>('action')
+  const [tab, setTab] = useState<Tab>('pending')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)  // 거절 대상(메시지 모달)
@@ -474,10 +474,11 @@ function ReservationsView() {
   }
 
   const matchTab = (b: Booking, key: Tab) => {
-    if (key === 'action') return needsAction(b)
-    if (key === 'rescheduling') return isReschedulePending(b) || isClinicProposed(b)
+    if (key === 'pending') return isNewPending(b) || (b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0)
+    if (key === 'reschedule') return isReschedulePending(b)
+    if (key === 'proposed') return isClinicProposed(b)
     if (key === 'all') return true
-    return b.booker.status === key
+    return b.booker.status === key  // confirmed / rejected / cancelled
   }
   // 이름(LINE 프로필명·로마자·한국식) 검색 — 예약자/동반자 전원 대상
   const matchName = (b: Booking) => {
@@ -523,23 +524,35 @@ function ReservationsView() {
         />
         <button onClick={() => load()} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
       </div>
-      {/* 2줄: 상태 탭 */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-        {TABS.map(t => {
-          const count = bookings.filter(b => matchTab(b, t.key)).length
-          const active = tab === t.key
-          const c = TAB_COLOR[t.key]
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '8px 14px', borderRadius: 999,
-              border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
-              background: active ? c.bg : 'transparent', color: active ? c.fg : '#333',
-              fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
-            }}>
-              {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
-            </button>
-          )
-        })}
+      {/* 2줄: 상태 탭 + 정렬 (한 줄) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {TABS.map(t => {
+            const count = bookings.filter(b => matchTab(b, t.key)).length
+            const active = tab === t.key
+            const c = TAB_COLOR[t.key]
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                padding: '8px 14px', borderRadius: 999,
+                border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
+                background: active ? c.bg : 'transparent', color: active ? c.fg : '#333',
+                fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
+              }}>
+                {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12.5, color: '#888' }}>정렬</span>
+          <select value={sortKey} onChange={e => setSortKey(e.target.value as 'created' | 'reserved')} style={{ height: 34, boxSizing: 'border-box', padding: '0 10px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }}>
+            <option value="created">접수일</option>
+            <option value="reserved">예약일</option>
+          </select>
+          <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{ height: 34, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>
+            {sortDir === 'desc' ? '내림차순 ↓' : '오름차순 ↑'}
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -548,17 +561,6 @@ function ReservationsView() {
         <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
       ) : (
         <div>
-          {/* 정렬 */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 12.5, color: '#888' }}>정렬</span>
-            <select value={sortKey} onChange={e => setSortKey(e.target.value as 'created' | 'reserved')} style={{ height: 34, boxSizing: 'border-box', padding: '0 10px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }}>
-              <option value="created">접수일</option>
-              <option value="reserved">예약일</option>
-            </select>
-            <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{ height: 34, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>
-              {sortDir === 'desc' ? '내림차순 ↓' : '오름차순 ↑'}
-            </button>
-          </div>
           {/* 컬럼 헤더 */}
           <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
             {RES_HEADERS.map((h, i) => <div key={h} style={{ ...headCell, textAlign: RES_ALIGN[i] }}>{h}</div>)}
