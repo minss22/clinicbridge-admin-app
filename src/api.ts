@@ -84,7 +84,7 @@ export const adminApi = {
   getReservations: (branchId?: string): Promise<Booking[]> =>
     adminGet('admin-reservations', branchId ? { branchId } : {}),
   confirm: (reservationId: string) => adminPost('admin-confirm', { reservationId }),
-  reject: (reservationId: string) => adminPost('admin-reject', { reservationId }),
+  reject: (reservationId: string, message?: string) => adminPost('admin-reject', { reservationId, message }),
   propose: (reservationId: string, date: string, times: string[]) =>
     adminPost('admin-propose', { reservationId, date, times }),
   // 슬롯 조회(공개 엔드포인트) — 제안 시간 선택용
@@ -109,5 +109,5 @@ export const adminApi = {
   managerPropose: (reservationId: string, date: string, times: string[]) =>
     adminPost('manager-propose', { reservationId, date, times }),
   managerConfirm: (reservationId: string) => adminPost('manager-confirm', { reservationId }),
-  managerReject: (reservationId: string) => adminPost('manager-reject', { reservationId }),
+  managerReject: (reservationId: string, message?: string) => adminPost('manager-reject', { reservationId, message }),
 }

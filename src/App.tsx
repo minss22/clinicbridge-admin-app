@@ -166,6 +166,7 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
   const [done, setDone] = useState<'' | 'confirmed' | 'rejected' | 'proposed'>('')
   const [err, setErr] = useState('')
   const [confirmAction, setConfirmAction] = useState<null | { result: 'confirmed' | 'rejected' | 'proposed'; fn: () => Promise<unknown> }>(null)
+  const [rejectMsg, setRejectMsg] = useState('')
 
   useEffect(() => {
     adminApi.getManagerProposeInfo(reservationId)
@@ -189,7 +190,8 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
     if (!confirmAction) return
     const { fn, result } = confirmAction
     setConfirmAction(null)
-    await run(fn, result)
+    // 거절은 최신 메시지를 함께 전송
+    await run(result === 'rejected' ? () => adminApi.managerReject(reservationId, rejectMsg.trim() || undefined) : fn, result)
   }
 
   const wrap = (children: React.ReactNode) => (
@@ -253,7 +255,7 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 10 }}>
             <button disabled={busy} onClick={() => setConfirmAction({ result: 'confirmed', fn: () => adminApi.managerConfirm(reservationId) })} style={btn('#1D9E75', '#fff')}>✅ 확정</button>
-            <button disabled={busy} onClick={() => setConfirmAction({ result: 'rejected', fn: () => adminApi.managerReject(reservationId) })} style={btn('#fff', '#E53E3E', '#E53E3E')}>❌ 거절</button>
+            <button disabled={busy} onClick={() => { setRejectMsg(''); setConfirmAction({ result: 'rejected', fn: () => adminApi.managerReject(reservationId) }) }} style={btn('#fff', '#E53E3E', '#E53E3E')}>❌ 거절</button>
           </div>
           {info.canPropose && (
             <button disabled={busy} onClick={() => setProposing(true)} style={{ ...btn('#FFFBEB', '#B45309', '#F6A623'), borderStyle: 'dashed' }}>🕒 다른 시간 제안</button>
@@ -284,11 +286,14 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
       {confirmAction && (
         <div onClick={() => !busy && setConfirmAction(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: '22px 20px', width: '100%', maxWidth: 320, textAlign: 'center' }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: '#222', whiteSpace: 'pre-line', lineHeight: 1.6, margin: '0 0 18px' }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#222', whiteSpace: 'pre-line', lineHeight: 1.6, margin: '0 0 14px' }}>
               {confirmAction.result === 'confirmed' ? '이 예약을 확정하시겠습니까?'
                 : confirmAction.result === 'rejected' ? '이 예약을 거절하시겠습니까?'
                 : `다음 시간을 제안하시겠습니까?\n${dot(info.targetDate)} · ${picked.join(', ')}`}
             </p>
+            {confirmAction.result === 'rejected' && (
+              <textarea value={rejectMsg} onChange={e => setRejectMsg(e.target.value)} rows={3} placeholder="고객에게 보낼 메시지 (선택, 일본어로 번역되어 전달)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14, resize: 'vertical', fontFamily: 'inherit', marginBottom: 14, textAlign: 'left' }} />
+            )}
             <div style={{ display: 'flex', gap: 10 }}>
               <button disabled={busy} onClick={() => setConfirmAction(null)} style={btn('#fff', '#666', '#DDD')}>취소</button>
               <button disabled={busy} onClick={proceed} style={btn(confirmAction.result === 'rejected' ? '#E53E3E' : '#1D9E75', '#fff')}>예</button>
@@ -406,6 +411,8 @@ function ReservationsView() {
   const [tab, setTab] = useState<Tab>('action')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null)  // 거절 대상(메시지 모달)
+  const [rejectMsg, setRejectMsg] = useState('')
   const [query, setQuery] = useState('')      // 이름 검색
   const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
   const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
@@ -440,13 +447,27 @@ function ReservationsView() {
   }, [branchId])
 
   const act = async (kind: 'confirm' | 'reject', reservationId: string) => {
-    if (!confirm(kind === 'confirm' ? '확정하시겠습니까? (고객에게 알림이 갑니다)' : '거절하시겠습니까? (고객에게 알림이 갑니다)')) return
+    if (kind === 'reject') { setRejectTarget(reservationId); setRejectMsg(''); return }  // 거절은 메시지 모달로
+    if (!confirm('확정하시겠습니까? (고객에게 알림이 갑니다)')) return
     setBusy(reservationId)
     try {
-      await (kind === 'confirm' ? adminApi.confirm(reservationId) : adminApi.reject(reservationId))
+      await adminApi.confirm(reservationId)
       await load()
     } catch (e: any) {
       alert(e?.message || '처리에 실패했습니다')
+    } finally {
+      setBusy(null)
+    }
+  }
+  const doReject = async () => {
+    if (!rejectTarget) return
+    setBusy(rejectTarget)
+    try {
+      await adminApi.reject(rejectTarget, rejectMsg.trim() || undefined)
+      setRejectTarget(null)
+      await load()
+    } catch (e: any) {
+      alert(e?.message || '거절 처리에 실패했습니다')
     } finally {
       setBusy(null)
     }
@@ -545,6 +566,20 @@ function ReservationsView() {
           {/* 카드 목록 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
             {sorted.map(b => <BookingRows key={b.groupId} b={b} busy={busy} act={act} reload={() => load(true)} />)}
+          </div>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <div onClick={() => { if (!busy) setRejectTarget(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 380, fontFamily: 'system-ui, sans-serif' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>예약 거절</h3>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#888', lineHeight: 1.6 }}>고객에게 거절 알림이 발송됩니다. 아래 메시지를 적으면 알림 뒤에 함께 보냅니다(일본어로 번역되어 전달).</p>
+            <textarea value={rejectMsg} onChange={e => setRejectMsg(e.target.value)} rows={4} placeholder="고객에게 보낼 메시지 (선택)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button disabled={!!busy} onClick={() => setRejectTarget(null)} style={{ flex: 1, padding: '11px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>취소</button>
+              <button disabled={!!busy} onClick={doReject} style={{ flex: 1, padding: '11px', borderRadius: 8, border: 'none', background: '#E53E3E', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>{busy ? '처리 중…' : '거절하기'}</button>
+            </div>
           </div>
         </div>
       )}
