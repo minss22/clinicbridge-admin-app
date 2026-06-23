@@ -839,12 +839,12 @@ function BranchesView() {
 
 function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void }) {
   const [copied, setCopied] = useState(false)
-  const [holidays, setHolidays] = useState<Set<string>>(new Set())
+  const [holidays, setHolidays] = useState<Map<string, string>>(new Map())
   // 일정(휴무 요일/점심 없는 요일/휴무일/마감시간)은 상세에서 바로 편집
   const [sched, setSched] = useState({ closedDays: b.closedDays, noLunchDays: b.noLunchDays, holidayDates: b.holidayDates, blockedSlots: b.blockedSlots })
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Set(h))).catch(() => {}) }, [])
+  useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Map(h.map(x => [x.date, x.name])))).catch(() => {}) }, [])
 
   const url = `https://liff.line.me/${LIFF_ID}?branch=${b.branchId}`
   const copy = async () => {
@@ -926,7 +926,7 @@ function DayRow({ value, onToggle }: { value: number[]; onToggle: (d: number) =>
 }
 // 휴무일(전체) + 마감 시간(개별)을 캘린더로 설정. 공휴일은 표시만(자동 휴무 X).
 function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
-  b: AdminBranch; holidays: Set<string>
+  b: AdminBranch; holidays: Map<string, string>
   onToggleHoliday: (date: string) => void
   onToggleBlocked: (date: string, time: string) => void
 }) {
@@ -961,24 +961,25 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
           const selected = sel === ds
           return (
             <button type="button" key={i} onClick={() => setSel(ds)} style={{
-              position: 'relative', padding: '8px 0', borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
+              position: 'relative', padding: '5px 1px', minHeight: 46, borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
               border: `1.5px solid ${selected ? '#111' : 'transparent'}`,
               background: closed ? '#FEE2E2' : 'transparent',
               color: closed ? '#B91C1C' : isHol ? '#E53E3E' : '#333', fontWeight: closed ? 700 : 400,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
             }}>
-              {Number(ds.slice(8))}
-              {isHol && !closed && <span style={{ position: 'absolute', top: 2, right: 4, width: 4, height: 4, borderRadius: 999, background: '#E53E3E' }} />}
-              {hasBlocked && !closed && <span style={{ position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: 999, background: '#F6A623' }} />}
+              <span>{Number(ds.slice(8))}</span>
+              {isHol && <span style={{ fontSize: 8.5, lineHeight: 1.05, color: '#E53E3E', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{holidays.get(ds)}</span>}
+              {hasBlocked && !closed && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: 999, background: '#F6A623' }} />}
             </button>
           )
         })}
       </div>
-      <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}><span style={{ color: '#E53E3E' }}>●</span> 공휴일 &nbsp; <span style={{ color: '#F6A623' }}>●</span> 일부 시간 마감 &nbsp; <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0 4px', borderRadius: 4 }}>휴무</span></div>
+      <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}><span style={{ color: '#E53E3E' }}>빨강</span> 공휴일 &nbsp; <span style={{ color: '#F6A623' }}>●</span> 일부 시간 마감 &nbsp; <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0 4px', borderRadius: 4 }}>휴무</span></div>
 
       {sel && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #EEE' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <b style={{ fontSize: 13.5 }}>{sel.replace(/-/g, '.')}{holidays.has(sel) && <span style={{ color: '#E53E3E', fontSize: 12, marginLeft: 6 }}>공휴일</span>}</b>
+            <b style={{ fontSize: 13.5 }}>{sel.replace(/-/g, '.')}{holidays.has(sel) && <span style={{ color: '#E53E3E', fontSize: 12, marginLeft: 6 }}>{holidays.get(sel)}</span>}</b>
             <button type="button" onClick={() => onToggleHoliday(sel)} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${closedSet.has(sel) ? '#E53E3E' : '#DDD'}`, background: closedSet.has(sel) ? '#E53E3E' : '#fff', color: closedSet.has(sel) ? '#fff' : '#666' }}>
               {closedSet.has(sel) ? '휴무 해제' : '이 날 휴무'}
             </button>
@@ -1047,10 +1048,10 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
       </div>
       <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감 {b.closeBufferMin || 0}분 · 점심 시작 {b.lunchBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
       <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 10 }}>※ 휴무 요일·휴무일·마감 시간은 병원 상세 페이지에서 바로 설정할 수 있습니다.</div>
-      <Lbl>매니저 LINE ID</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
-      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 4 }}>예약 알림을 받을 매니저의 LINE userId (U로 시작하는 33자)</div>
-      <Lbl>채널 액세스 토큰</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
-      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 4 }}>이 병원 LINE 공식계정의 Messaging API 토큰. 비우면 전역 토큰 사용</div>
+      <Lbl>매니저 LINE ID <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>예약 알림을 받을 LINE userId</span></Lbl>
+      <Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
+      <Lbl>채널 액세스 토큰 <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>이 병원 LINE 공식계정의 Messaging API 토큰</span></Lbl>
+      <Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
 
       <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
         <button disabled={busy} onClick={save} style={{ ...primaryBtn, flex: 1, padding: '12px' }}>{busy ? '저장 중…' : '저장'}</button>
