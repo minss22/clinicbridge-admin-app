@@ -150,8 +150,9 @@ function pendingCompanionBatches(b: Booking): Person[][] {
   }
   return Object.values(map)
 }
-const isClinicProposed = (b: Booking) => !!b.requestedDate && b.proposedBy === 'clinic'  // 병원이 시간 제안 → 고객 응답 대기
-const isReschedulePending = (b: Booking) => !!b.requestedDate && b.proposedBy !== 'clinic'  // 고객 일시변경 요청 → 병원 처리
+// 제안/변경요청은 '활성(pending)'일 때만 인정 — 취소/거절된 건의 잔여 제안필드로 잘못 표시되지 않도록
+const isClinicProposed = (b: Booking) => b.booker.status === 'pending' && !!b.requestedDate && b.proposedBy === 'clinic'  // 병원이 시간 제안 → 고객 응답 대기
+const isReschedulePending = (b: Booking) => b.booker.status === 'pending' && !!b.requestedDate && b.proposedBy !== 'clinic'  // 고객 일시변경 요청 → 병원 처리
 const isNewPending = (b: Booking) => b.booker.status === 'pending' && !b.requestedDate
 // 예약자 배지 상태: 고객 일시변경 요청='일시변경 요청', 병원 제안 대기='시간 조정 중'
 const bookerDisplayStatus = (b: Booking) =>
