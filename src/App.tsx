@@ -815,8 +815,8 @@ function BranchesView() {
   useEffect(() => { load() }, [])
 
   if (editing) return <BranchForm init={editing.b} isNew={editing.isNew}
-    onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setSelected(null); load() }} />
-  if (selected) return <BranchDetail b={selected} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} />
+    onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); setSelected(saved); load() }} />
+  if (selected) return <BranchDetail b={selected} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
   if (loading) return <Center small>불러오는 중…</Center>
   return (
     <div>
@@ -837,14 +837,30 @@ function BranchesView() {
   )
 }
 
-function BranchDetail({ b, onBack, onEdit }: { b: AdminBranch; onBack: () => void; onEdit: () => void }) {
+function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void }) {
   const [copied, setCopied] = useState(false)
+  const [holidays, setHolidays] = useState<Set<string>>(new Set())
+  // 일정(휴무 요일/점심 없는 요일/휴무일/마감시간)은 상세에서 바로 편집
+  const [sched, setSched] = useState({ closedDays: b.closedDays, noLunchDays: b.noLunchDays, holidayDates: b.holidayDates, blockedSlots: b.blockedSlots })
+  const [dirty, setDirty] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Set(h))).catch(() => {}) }, [])
+
   const url = `https://liff.line.me/${LIFF_ID}?branch=${b.branchId}`
   const copy = async () => {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) }
     catch { prompt('URL 복사', url) }
   }
-  const days = (arr: number[]) => (arr.length ? arr.map(d => WEEKDAYS[d]).join(', ') : '없음')
+  const bCal = { ...b, ...sched }   // 캘린더 슬롯 계산 + 표시용
+  const toggleDay = (key: 'closedDays' | 'noLunchDays', d: number) => { setSched(p => ({ ...p, [key]: p[key].includes(d) ? p[key].filter(x => x !== d) : [...p[key], d] })); setDirty(true) }
+  const toggleHoliday = (date: string) => { setSched(p => ({ ...p, holidayDates: p.holidayDates.includes(date) ? p.holidayDates.filter(x => x !== date) : [...p.holidayDates, date] })); setDirty(true) }
+  const toggleBlocked = (date: string, time: string) => { const key = `${date} ${time}`; setSched(p => ({ ...p, blockedSlots: p.blockedSlots.includes(key) ? p.blockedSlots.filter(x => x !== key) : [...p.blockedSlots, key] })); setDirty(true) }
+  const saveSched = async () => {
+    setBusy(true)
+    try { const merged = { ...b, ...sched }; await adminApi.saveBranch(merged); setDirty(false); onChanged(merged) }
+    catch (e: any) { alert(e?.message || '저장 실패') } finally { setBusy(false) }
+  }
+
   return (
     <div style={{ margin: '16px 0' }}>
       <button onClick={onBack} style={ghostBtn}>← 목록</button>
@@ -869,17 +885,20 @@ function BranchDetail({ b, onBack, onEdit }: { b: AdminBranch; onBack: () => voi
         <Row k="병원 ID" v={b.branchId} />
         <Row k="주소 (한국어)" v={b.address} />
         <Row k="주소 (일본어)" v={b.addressJa} />
-      </div>
-
-      <div style={cardStyle}>
-        <div style={sectionTitle}>영업 / 휴무</div>
         <Row k="영업시간" v={`${b.openTime || '-'} ~ ${b.closeTime || '-'}`} />
         <Row k="점심시간" v={b.lunchStart ? `${b.lunchStart} ~ ${b.lunchEnd || '-'}` : '없음'} />
         <Row k="예약 마감 버퍼" v={`마감 ${b.closeBufferMin ?? 90}분 · 점심 ${b.lunchBufferMin ?? 90}분 전까지`} />
-        <Row k="휴무 요일" v={days(b.closedDays)} />
-        <Row k="점심 없는 요일" v={days(b.noLunchDays)} />
-        <Row k="지정 휴무일" v={b.holidayDates.length ? `${b.holidayDates.length}일` : '없음'} />
-        <Row k="마감한 시간" v={b.blockedSlots.length ? `${b.blockedSlots.length}건` : '없음'} />
+      </div>
+
+      <div style={cardStyle}>
+        <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>휴무 / 마감 시간 설정</span>
+          <button disabled={!dirty || busy} onClick={saveSched} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 700, cursor: dirty ? 'pointer' : 'default', background: dirty ? '#1D9E75' : '#E5E7EB', color: '#fff' }}>{busy ? '저장 중…' : '저장'}</button>
+        </div>
+        <Lbl>휴무 요일</Lbl><DayRow value={sched.closedDays} onToggle={d => toggleDay('closedDays', d)} />
+        <Lbl>점심 없는 요일</Lbl><DayRow value={sched.noLunchDays} onToggle={d => toggleDay('noLunchDays', d)} />
+        <Lbl>휴무일 / 마감 시간 (캘린더)</Lbl>
+        <BranchCalendar b={bCal} holidays={holidays} onToggleHoliday={toggleHoliday} onToggleBlocked={toggleBlocked} />
       </div>
 
       <div style={cardStyle}>
@@ -901,6 +920,16 @@ function Row({ k, v }: { k: string; v?: string | null }) {
 }
 
 const navBtnB: React.CSSProperties = { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#555', padding: '0 8px' }
+function DayRow({ value, onToggle }: { value: number[]; onToggle: (d: number) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {WEEKDAYS.map((w, d) => {
+        const on = value.includes(d)
+        return <button type="button" key={d} onClick={() => onToggle(d)} style={{ width: 38, height: 38, borderRadius: 8, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#666', fontSize: 13, fontWeight: 600 }}>{w}</button>
+      })}
+    </div>
+  )
+}
 // 휴무일(전체) + 마감 시간(개별)을 캘린더로 설정. 공휴일은 표시만(자동 휴무 X).
 function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
   b: AdminBranch; holidays: Set<string>
@@ -981,42 +1010,24 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
   )
 }
 
-function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNew: boolean; onClose: () => void; onSaved: () => void }) {
+function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNew: boolean; onClose: () => void; onSaved: (saved: AdminBranch | null) => void }) {
   const [b, setB] = useState<AdminBranch>(init)
-  const [holidays, setHolidays] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
-  useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Set(h))).catch(() => {}) }, [])
   const set = (k: keyof AdminBranch, v: any) => setB(prev => ({ ...prev, [k]: v }))
-  const toggleDay = (key: 'closedDays' | 'noLunchDays', d: number) =>
-    setB(prev => ({ ...prev, [key]: prev[key].includes(d) ? prev[key].filter(x => x !== d) : [...prev[key], d] }))
-  const toggleHoliday = (date: string) =>
-    setB(prev => ({ ...prev, holidayDates: prev.holidayDates.includes(date) ? prev.holidayDates.filter(x => x !== date) : [...prev.holidayDates, date] }))
-  const toggleBlocked = (date: string, time: string) => {
-    const key = `${date} ${time}`
-    setB(prev => ({ ...prev, blockedSlots: prev.blockedSlots.includes(key) ? prev.blockedSlots.filter(x => x !== key) : [...prev.blockedSlots, key] }))
-  }
 
   const save = async () => {
     if (!b.branchId.trim()) { alert('병원 ID를 입력하세요'); return }
     setBusy(true)
     try {
       await adminApi.saveBranch(b)
-      onSaved()
+      onSaved(b)
     } catch (e: any) { alert(e?.message || '저장 실패') } finally { setBusy(false) }
   }
   const del = async () => {
     if (!confirm('이 병원을 삭제하시겠습니까?')) return
     setBusy(true)
-    try { await adminApi.deleteBranch(b.branchId); onSaved() } catch (e: any) { alert(e?.message || '삭제 실패') } finally { setBusy(false) }
+    try { await adminApi.deleteBranch(b.branchId); onSaved(null) } catch (e: any) { alert(e?.message || '삭제 실패') } finally { setBusy(false) }
   }
-  const dayRow = (key: 'closedDays' | 'noLunchDays') => (
-    <div style={{ display: 'flex', gap: 6 }}>
-      {WEEKDAYS.map((w, d) => {
-        const on = b[key].includes(d)
-        return <button key={d} onClick={() => toggleDay(key, d)} style={{ width: 38, height: 38, borderRadius: 8, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#666', fontSize: 13, fontWeight: 600 }}>{w}</button>
-      })}
-    </div>
-  )
 
   return (
     <div style={{ margin: '16px 0' }}>
@@ -1041,12 +1052,7 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
         <div style={{ flex: 0.8 }}><Lbl>점심 버퍼(분)</Lbl><Txt type="number" value={String(b.lunchBufferMin)} onChange={v => set('lunchBufferMin', Number(v) || 0)} placeholder="90" /></div>
       </div>
       <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감 {b.closeBufferMin || 0}분 · 점심 시작 {b.lunchBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
-
-      <Lbl>휴무 요일</Lbl>{dayRow('closedDays')}
-      <Lbl>점심 없는 요일</Lbl>{dayRow('noLunchDays')}
-
-      <Lbl>휴무일 / 마감 시간 (캘린더)</Lbl>
-      <BranchCalendar b={b} holidays={holidays} onToggleHoliday={toggleHoliday} onToggleBlocked={toggleBlocked} />
+      <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 10 }}>※ 휴무 요일·휴무일·마감 시간은 병원 상세 페이지에서 바로 설정할 수 있습니다.</div>
       <Lbl>매니저 LINE ID (알림 수신)</Lbl><Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
       <Lbl>채널 액세스 토큰 (병원별 푸시)</Lbl><Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
 
