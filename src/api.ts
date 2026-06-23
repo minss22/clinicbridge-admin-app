@@ -94,7 +94,6 @@ export const adminApi = {
 
   // 병원 관리
   getAdminBranches: (): Promise<AdminBranch[]> => adminGet('admin-branches-full'),
-  getHolidays: (): Promise<{ date: string; name: string }[]> => adminGet('admin-holidays'),
   saveBranch: (branch: AdminBranch) => adminPost('admin-branch-save', { branch }),
   deleteBranch: (branchId: string) => adminPost('admin-branch-delete', { branchId }),
 

@@ -839,12 +839,10 @@ function BranchesView() {
 
 function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void }) {
   const [copied, setCopied] = useState(false)
-  const [holidays, setHolidays] = useState<Map<string, string>>(new Map())
   // 일정(휴무 요일/점심 없는 요일/휴무일/마감시간)은 상세에서 바로 편집
   const [sched, setSched] = useState({ closedDays: b.closedDays, noLunchDays: b.noLunchDays, holidayDates: b.holidayDates, blockedSlots: b.blockedSlots })
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Map(h.map(x => [x.date, x.name])))).catch(() => {}) }, [])
 
   const url = `https://liff.line.me/${LIFF_ID}?branch=${b.branchId}`
   const copy = async () => {
@@ -898,7 +896,7 @@ function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack
         <Lbl>휴무 요일</Lbl><DayRow value={sched.closedDays} onToggle={d => toggleDay('closedDays', d)} />
         <Lbl>점심 없는 요일</Lbl><DayRow value={sched.noLunchDays} onToggle={d => toggleDay('noLunchDays', d)} />
         <Lbl>휴무일 / 마감 시간 (캘린더)</Lbl>
-        <BranchCalendar b={bCal} holidays={holidays} onToggleHoliday={toggleHoliday} onToggleBlocked={toggleBlocked} />
+        <BranchCalendar b={bCal} onToggleHoliday={toggleHoliday} onToggleBlocked={toggleBlocked} />
       </div>
     </div>
   )
@@ -925,8 +923,8 @@ function DayRow({ value, onToggle }: { value: number[]; onToggle: (d: number) =>
   )
 }
 // 휴무일(전체) + 마감 시간(개별)을 캘린더로 설정. 공휴일은 표시만(자동 휴무 X).
-function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
-  b: AdminBranch; holidays: Map<string, string>
+function BranchCalendar({ b, onToggleHoliday, onToggleBlocked }: {
+  b: AdminBranch
   onToggleHoliday: (date: string) => void
   onToggleBlocked: (date: string, time: string) => void
 }) {
@@ -956,7 +954,6 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
         {cells.map((ds, i) => {
           if (!ds) return <div key={i} />
           const closed = closedSet.has(ds)
-          const isHol = holidays.has(ds)
           const hasBlocked = b.blockedSlots.some(s => s.startsWith(ds + ' '))
           const selected = sel === ds
           return (
@@ -964,22 +961,21 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
               position: 'relative', minHeight: 46, borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
               border: `1.5px solid ${selected ? '#111' : 'transparent'}`,
               background: closed ? '#FEE2E2' : 'transparent',
-              color: closed ? '#B91C1C' : isHol ? '#E53E3E' : '#333', fontWeight: closed ? 700 : 400,
+              color: closed ? '#B91C1C' : '#333', fontWeight: closed ? 700 : 400,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <span>{Number(ds.slice(8))}</span>
-              {isHol && <span style={{ position: 'absolute', bottom: 2, left: 0, right: 0, textAlign: 'center', fontSize: 8.5, lineHeight: 1, color: '#E53E3E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{holidays.get(ds)}</span>}
               {hasBlocked && !closed && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: 999, background: '#F6A623' }} />}
             </button>
           )
         })}
       </div>
-      <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}><span style={{ color: '#E53E3E' }}>빨강</span> 공휴일 &nbsp; <span style={{ color: '#F6A623' }}>●</span> 일부 시간 마감 &nbsp; <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0 4px', borderRadius: 4 }}>휴무</span></div>
+      <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}><span style={{ color: '#F6A623' }}>●</span> 일부 시간 마감 &nbsp; <span style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0 4px', borderRadius: 4 }}>휴무</span></div>
 
       {sel && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #EEE' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <b style={{ fontSize: 13.5 }}>{sel.replace(/-/g, '.')}{holidays.has(sel) && <span style={{ color: '#E53E3E', fontSize: 12, marginLeft: 6 }}>{holidays.get(sel)}</span>}</b>
+            <b style={{ fontSize: 13.5 }}>{sel.replace(/-/g, '.')}</b>
             <button type="button" onClick={() => onToggleHoliday(sel)} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${closedSet.has(sel) ? '#E53E3E' : '#DDD'}`, background: closedSet.has(sel) ? '#E53E3E' : '#fff', color: closedSet.has(sel) ? '#fff' : '#666' }}>
               {closedSet.has(sel) ? '휴무 해제' : '이 날 휴무'}
             </button>
