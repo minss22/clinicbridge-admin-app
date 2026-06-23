@@ -409,6 +409,8 @@ function ReservationsView() {
   const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
   const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
   const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
+  const [sortKey, setSortKey] = useState<'created' | 'reserved'>('created')        // 정렬 기준
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')                    // 정렬 방향
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -461,6 +463,13 @@ function ReservationsView() {
     return true
   }
   const filtered = bookings.filter(b => matchTab(b, tab) && matchName(b) && matchDate(b))
+  // 정렬: 접수일(createdAt) 또는 예약일(date+time), 오름/내림
+  const sortVal = (b: Booking) => sortKey === 'created' ? (b.createdAt || '') : `${b.date} ${b.time}`
+  const sorted = [...filtered].sort((a, b) => {
+    const va = sortVal(a), vb = sortVal(b)
+    const c = va < vb ? -1 : va > vb ? 1 : 0
+    return sortDir === 'asc' ? c : -c
+  })
 
   return (
     <div>
@@ -504,13 +513,24 @@ function ReservationsView() {
         <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
       ) : (
         <div>
+          {/* 정렬 */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 12.5, color: '#888' }}>정렬</span>
+            <select value={sortKey} onChange={e => setSortKey(e.target.value as 'created' | 'reserved')} style={{ height: 34, boxSizing: 'border-box', padding: '0 10px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }}>
+              <option value="created">접수일</option>
+              <option value="reserved">예약일</option>
+            </select>
+            <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} style={{ height: 34, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 13, cursor: 'pointer' }}>
+              {sortDir === 'desc' ? '내림차순 ↓' : '오름차순 ↑'}
+            </button>
+          </div>
           {/* 컬럼 헤더 */}
           <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
             {RES_HEADERS.map((h, i) => <div key={h} style={{ ...headCell, textAlign: RES_ALIGN[i] }}>{h}</div>)}
           </div>
           {/* 카드 목록 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-            {filtered.map(b => <BookingRows key={b.groupId} b={b} />)}
+            {sorted.map(b => <BookingRows key={b.groupId} b={b} />)}
           </div>
         </div>
       )}
