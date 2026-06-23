@@ -961,14 +961,14 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
           const selected = sel === ds
           return (
             <button type="button" key={i} onClick={() => setSel(ds)} style={{
-              position: 'relative', padding: '5px 1px', minHeight: 46, borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
+              position: 'relative', minHeight: 46, borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
               border: `1.5px solid ${selected ? '#111' : 'transparent'}`,
               background: closed ? '#FEE2E2' : 'transparent',
               color: closed ? '#B91C1C' : isHol ? '#E53E3E' : '#333', fontWeight: closed ? 700 : 400,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <span>{Number(ds.slice(8))}</span>
-              {isHol && <span style={{ fontSize: 8.5, lineHeight: 1.05, color: '#E53E3E', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{holidays.get(ds)}</span>}
+              {isHol && <span style={{ position: 'absolute', bottom: 2, left: 0, right: 0, textAlign: 'center', fontSize: 8.5, lineHeight: 1, color: '#E53E3E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{holidays.get(ds)}</span>}
               {hasBlocked && !closed && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: 999, background: '#F6A623' }} />}
             </button>
           )
