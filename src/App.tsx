@@ -777,7 +777,7 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 const emptyBranch = (): AdminBranch => ({
   branchId: '', name: '', nameJa: '', address: '', addressJa: '',
   openTime: '', closeTime: '', lunchStart: '', lunchEnd: '',
-  closedDays: [], noLunchDays: [], holidayDates: [], bookingBufferMin: 90, blockedSlots: [],
+  closedDays: [], noLunchDays: [], holidayDates: [], closeBufferMin: 90, lunchBufferMin: 90, blockedSlots: [],
   lineNotifyId: '', channelAccessToken: '',
 })
 // 폼 값으로 특정 날짜의 시간 슬롯 계산 (백엔드 computeSlots와 동일 규칙)
@@ -788,13 +788,13 @@ function computeSlotsClient(b: AdminBranch, date: string): string[] {
   if (b.closedDays.includes(dow)) return []
   const open = toMinC(b.openTime), close = toMinC(b.closeTime)
   if (open == null || close == null) return []
-  const buffer = b.bookingBufferMin ?? 90
+  const closeBuf = b.closeBufferMin ?? 90, lunchBuf = b.lunchBufferMin ?? 90
   const ls = toMinC(b.lunchStart), le = toMinC(b.lunchEnd)
   const noLunch = b.noLunchDays.includes(dow)
   const times: string[] = []
   const add = (from: number, to: number) => { for (let t = from; t <= to; t += 30) times.push(minToHHMMc(t)) }
-  if (ls != null && le != null && !noLunch) { add(open, ls - buffer); add(le, close - buffer) }
-  else add(open, close - buffer)
+  if (ls != null && le != null && !noLunch) { add(open, ls - lunchBuf); add(le, close - closeBuf) }
+  else add(open, close - closeBuf)
   return times
 }
 function Lbl({ children }: { children: React.ReactNode }) {
@@ -875,7 +875,7 @@ function BranchDetail({ b, onBack, onEdit }: { b: AdminBranch; onBack: () => voi
         <div style={sectionTitle}>영업 / 휴무</div>
         <Row k="영업시간" v={`${b.openTime || '-'} ~ ${b.closeTime || '-'}`} />
         <Row k="점심시간" v={b.lunchStart ? `${b.lunchStart} ~ ${b.lunchEnd || '-'}` : '없음'} />
-        <Row k="예약 마감 버퍼" v={`마감·점심 ${b.bookingBufferMin ?? 90}분 전까지`} />
+        <Row k="예약 마감 버퍼" v={`마감 ${b.closeBufferMin ?? 90}분 · 점심 ${b.lunchBufferMin ?? 90}분 전까지`} />
         <Row k="휴무 요일" v={days(b.closedDays)} />
         <Row k="점심 없는 요일" v={days(b.noLunchDays)} />
         <Row k="지정 휴무일" v={b.holidayDates.length ? `${b.holidayDates.length}일` : '없음'} />
@@ -1033,15 +1033,14 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ flex: 1 }}><Lbl>영업 시작</Lbl><Txt type="time" value={b.openTime} onChange={v => set('openTime', v)} /></div>
         <div style={{ flex: 1 }}><Lbl>영업 마감</Lbl><Txt type="time" value={b.closeTime} onChange={v => set('closeTime', v)} /></div>
+        <div style={{ flex: 0.8 }}><Lbl>마감 버퍼(분)</Lbl><Txt type="number" value={String(b.closeBufferMin)} onChange={v => set('closeBufferMin', Number(v) || 0)} placeholder="90" /></div>
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ flex: 1 }}><Lbl>점심 시작</Lbl><Txt type="time" value={b.lunchStart} onChange={v => set('lunchStart', v)} /></div>
         <div style={{ flex: 1 }}><Lbl>점심 종료</Lbl><Txt type="time" value={b.lunchEnd} onChange={v => set('lunchEnd', v)} /></div>
+        <div style={{ flex: 0.8 }}><Lbl>점심 버퍼(분)</Lbl><Txt type="number" value={String(b.lunchBufferMin)} onChange={v => set('lunchBufferMin', Number(v) || 0)} placeholder="90" /></div>
       </div>
-
-      <Lbl>예약 마감 버퍼 (분)</Lbl>
-      <Txt type="number" value={String(b.bookingBufferMin)} onChange={v => set('bookingBufferMin', Number(v) || 0)} placeholder="90" />
-      <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감·점심 시작 {b.bookingBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
+      <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감 {b.closeBufferMin || 0}분 · 점심 시작 {b.lunchBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
 
       <Lbl>휴무 요일</Lbl>{dayRow('closedDays')}
       <Lbl>점심 없는 요일</Lbl>{dayRow('noLunchDays')}

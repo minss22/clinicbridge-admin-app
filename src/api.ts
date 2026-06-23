@@ -63,7 +63,7 @@ export type AdminBranch = {
   branchId: string; name: string; nameJa: string; address: string; addressJa: string
   openTime: string; closeTime: string; lunchStart: string; lunchEnd: string
   closedDays: number[]; noLunchDays: number[]; holidayDates: string[]
-  bookingBufferMin: number; blockedSlots: string[]
+  closeBufferMin: number; lunchBufferMin: number; blockedSlots: string[]
   lineNotifyId: string; channelAccessToken: string
 }
 export type Customer = {
