@@ -517,8 +517,19 @@ function ReservationsView() {
       ) : filtered.length === 0 ? (
         <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {filtered.map(b => <BookingCard key={b.groupId} b={b} busy={busy} act={act} reload={() => load(true)} />)}
+        <div style={{ overflowX: 'auto', border: '1px solid #EEE', borderRadius: 12, background: '#fff' }}>
+          <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '희망 예산', '시술이력', '상태', '접수일자'].map(h => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(b => <BookingRows key={b.groupId} b={b} busy={busy} act={act} reload={() => load(true)} />)}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -527,6 +538,22 @@ function ReservationsView() {
 
 const genderKo = (g?: string | null) => (g === 'male' ? '남성' : g === 'female' ? '여성' : (g || '-'))
 const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight: 4 }
+
+// 예약 표 스타일
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '11px 14px', fontSize: 12, fontWeight: 700, color: '#888', borderBottom: '1px solid #EEE', whiteSpace: 'nowrap', background: '#FAFAFA' }
+const tdStyle: React.CSSProperties = { padding: '12px 14px', borderBottom: '1px solid #F2F2F2', verticalAlign: 'middle', color: '#333', whiteSpace: 'nowrap' }
+const actionBar = (bg: string): React.CSSProperties => ({ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: bg, borderTop: '1px solid #EEE' })
+const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
+const rejectBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
+const proposeBtn: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px dashed #F6A623', background: '#fff', color: '#B45309', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
+
+function VisitPill({ v }: { v: string }) {
+  const isFirst = v === 'first'
+  return <span style={{
+    fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 999, border: '1px solid', whiteSpace: 'nowrap',
+    ...(isFirst ? { color: '#1D4ED8', background: '#EFF6FF', borderColor: '#BFDBFE' } : { color: '#9333EA', background: '#FAF5FF', borderColor: '#E9D5FF' }),
+  }}>{visitKo(v)}</span>
+}
 
 function PersonDetail({ label, p, showStatus, displayStatus }: { label: string; p: Person; showStatus?: boolean; displayStatus?: string }) {
   const [more, setMore] = useState(false)
@@ -580,26 +607,12 @@ function StatusBadge({ status }: { status: string }) {
   return <span style={{ padding: '3px 10px', borderRadius: 10, background: c.bg, color: c.fg, fontSize: 12, fontWeight: 700 }}>{STATUS_KO[status] ?? status}</span>
 }
 
-function ActionRow({ label, accent, reservationId, busy, act }: {
-  label: string; accent: string; reservationId: string; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void
-}) {
-  const disabled = busy === reservationId
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, marginTop: 8 }}>
-      <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: accent }}>{label}</span>
-      <button disabled={disabled} onClick={() => act('confirm', reservationId)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: disabled ? 0.5 : 1 }}>확정</button>
-      <button disabled={disabled} onClick={() => act('reject', reservationId)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: disabled ? 0.5 : 1 }}>거절</button>
-    </div>
-  )
-}
-
-function BookingCard({ b, busy, act, reload }: { b: Booking; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; reload: () => void }) {
+function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; reload: () => void }) {
   const compBatches = pendingCompanionBatches(b)
   const [proposing, setProposing] = useState(false)
   const [slots, setSlots] = useState<{ time: string; available: boolean }[]>([])
   const [picked, setPicked] = useState<string[]>([])
   const [pBusy, setPBusy] = useState(false)
-
   // 제안 대상 날짜: 시간변경 요청이면 고객이 원한 날짜, 아니면 기존 예약 날짜
   const targetDate = isReschedulePending(b) ? (b.requestedDate || b.date) : b.date
 
@@ -609,85 +622,87 @@ function BookingCard({ b, busy, act, reload }: { b: Booking; busy: string | null
   }, [proposing])
 
   const toggle = (t: string) => setPicked(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
-
   const submitPropose = async () => {
     if (!picked.length) { alert('제안할 시간을 1개 이상 선택하세요'); return }
     setPBusy(true)
-    try {
-      await adminApi.propose(b.booker.id, targetDate, picked)
-      setProposing(false); setPicked([])
-      reload()
-    } catch (e: any) {
-      alert(e?.message || '제안 실패')
-    } finally {
-      setPBusy(false)
-    }
+    try { await adminApi.propose(b.booker.id, targetDate, picked); setProposing(false); setPicked([]); reload() }
+    catch (e: any) { alert(e?.message || '제안 실패') }
+    finally { setPBusy(false) }
   }
 
-  const proposePanel = (
-    !proposing ? (
-      <button onClick={() => setProposing(true)} style={{ marginTop: 6, width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed #F6A623', background: '#FFFBEB', color: '#B45309', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-        🕒 다른 시간 제안
-      </button>
-    ) : (
-      <div style={{ marginTop: 6, padding: 12, border: '1px solid #FED7AA', borderRadius: 10, background: '#FFF7ED', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9A3412' }}>{dot(targetDate)} · 제안할 시간 선택 (여러 개 가능)</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {slots.length === 0 && <span style={{ fontSize: 12.5, color: '#999' }}>해당 날짜에 가능한 시간이 없습니다.</span>}
-          {slots.map(s => {
-            const on = picked.includes(s.time)
-            return (
-              <button key={s.time} onClick={() => toggle(s.time)} style={{
-                padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#555',
-              }}>{s.time}</button>
-            )
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={pBusy} onClick={submitPropose} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: '#F6A623', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: pBusy ? 0.5 : 1 }}>{pBusy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
-          <button disabled={pBusy} onClick={() => { setProposing(false); setPicked([]) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 13, cursor: 'pointer' }}>취소</button>
-        </div>
-      </div>
-    )
+  const disabled = busy === b.booker.id
+  const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <td style={{ ...tdStyle, ...extra }}>{v}</td>
+
+  // 한 사람(예약자/동반자)을 표 한 행으로
+  const personCells = (p: Person, isComp: boolean, idx = 0) => (
+    <>
+      {cell(isComp ? '' : <b>{dot(b.date)} {b.time}</b>)}
+      {cell(isComp ? '' : b.branchName, { color: '#555' })}
+      {cell(isComp
+        ? <span style={{ color: '#666' }}>↳ 동반자 {idx + 1} · <b style={{ color: '#222' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>
+        : <span><b style={{ color: '#111' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>)}
+      {cell(p.birthDate || '-', { color: '#555' })}
+      {cell(genderKo(p.gender), { color: '#555' })}
+      {cell(<VisitPill v={p.visitType} />)}
+      {cell(p.treatmentRequest || '-')}
+      {cell(p.budget || '-', { color: '#555' })}
+      {cell(p.surgeryHistory || '-', { color: '#555' })}
+      {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />)}
+      {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888' })}
+    </>
   )
 
-  return (
-    <div style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 14, padding: 16 }}>
-      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444', marginBottom: 4 }}>{b.branchName} · {dot(b.date)} {b.time}</div>
-
-      <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} />
-      {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus />)}
-
-      {/* 병원이 제안함 — 고객 응답 대기 */}
-      {isClinicProposed(b) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, marginTop: 8 }}>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#9A3412' }}>🕒 시간 제안함 · 고객 응답 대기 → {dot(b.requestedDate)} ({b.proposedTimes.join(', ')})</span>
-          <button disabled={busy === b.booker.id} onClick={() => act('reject', b.booker.id)} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>제안 취소(거절)</button>
+  const actionContent = isClinicProposed(b) ? (
+    <div style={actionBar('#FFF7ED')}>
+      <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#9A3412' }}>🕒 시간 제안함 · 고객 응답 대기 → {dot(b.requestedDate)} ({b.proposedTimes.join(', ')})</span>
+      <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>제안 취소(거절)</button>
+    </div>
+  ) : (isReschedulePending(b) || isNewPending(b)) ? (
+    <>
+      <div style={actionBar('#FFFBEB')}>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
+        <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={confirmBtn}>확정</button>
+        <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={rejectBtn}>거절</button>
+        {!proposing && <button onClick={() => setProposing(true)} style={proposeBtn}>🕒 다른 시간 제안</button>}
+      </div>
+      {proposing && (
+        <div style={{ padding: '10px 14px', background: '#FFF7ED', borderTop: '1px solid #EEE', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#9A3412' }}>{dot(targetDate)} · 제안할 시간 선택 (여러 개)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {slots.length === 0 && <span style={{ fontSize: 12.5, color: '#999' }}>가능한 시간이 없습니다.</span>}
+            {slots.map(s => { const on = picked.includes(s.time); return (
+              <button key={s.time} onClick={() => toggle(s.time)} style={{ padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${on ? '#1D9E75' : '#DDD'}`, background: on ? '#1D9E75' : '#fff', color: on ? '#fff' : '#555' }}>{s.time}</button>
+            ) })}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button disabled={pBusy} onClick={submitPropose} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: '#F6A623', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: pBusy ? 0.5 : 1 }}>{pBusy ? '제안 중…' : `이 시간들 제안 (${picked.length})`}</button>
+            <button disabled={pBusy} onClick={() => { setProposing(false); setPicked([]) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 13, cursor: 'pointer' }}>취소</button>
+          </div>
         </div>
       )}
+    </>
+  ) : null
 
-      {/* 고객 시간변경 요청 → 병원 확정/거절 + 다른 시간 제안 */}
-      {isReschedulePending(b) && (
-        <>
-          <ActionRow label={`🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}`} accent="#92400E" reservationId={b.booker.id} busy={busy} act={act} />
-          {proposePanel}
-        </>
+  const companionBatchRows = b.booker.status === 'confirmed'
+    ? compBatches.map((batch, i) => (
+        <div key={i} style={actionBar('#ECFDF5')}>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#065F46' }}>➕ 동반자 추가 승인 대기: {batch.map(c => c.nameKo || c.name).join(', ')}</span>
+          <button disabled={busy === batch[0].id} onClick={() => act('confirm', batch[0].id)} style={confirmBtn}>확정</button>
+          <button disabled={busy === batch[0].id} onClick={() => act('reject', batch[0].id)} style={rejectBtn}>거절</button>
+        </div>
+      ))
+    : []
+
+  const hasAction = !!actionContent || companionBatchRows.length > 0
+
+  return (
+    <>
+      <tr>{personCells(b.booker, false)}</tr>
+      {b.companions.map((c, i) => <tr key={c.id} style={{ background: '#FCFCFC' }}>{personCells(c, true, i)}</tr>)}
+      {hasAction && (
+        <tr><td colSpan={11} style={{ padding: 0 }}>{actionContent}{companionBatchRows}</td></tr>
       )}
-
-      {/* 신규 예약 — 확정/거절 + 다른 시간 제안 */}
-      {isNewPending(b) && (
-        <>
-          <ActionRow label="🆕 신규 예약 승인 대기" accent="#92400E" reservationId={b.booker.id} busy={busy} act={act} />
-          {proposePanel}
-        </>
-      )}
-
-      {/* 동반자 추가 승인은 '예약 확정' 상태에서만 (대기중이면 예약 확정 시 함께 처리됨) */}
-      {b.booker.status === 'confirmed' && compBatches.map((batch, i) => (
-        <ActionRow key={i} label={`➕ 동반자 추가 승인 대기: ${batch.map(c => c.nameKo || c.name).join(', ')}`} accent="#065F46" reservationId={batch[0].id} busy={busy} act={act} />
-      ))}
-    </div>
+    </>
   )
 }
 
