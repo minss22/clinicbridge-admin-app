@@ -88,7 +88,7 @@ function AdminShell({ session }: { session: Session | null }) {
         </div>
       </aside>
       <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+        <div style={{ maxWidth: view === 'reservations' ? '100%' : 760, margin: '0 auto' }}>
           {view === 'reservations' && <ReservationsView />}
           {view === 'branches' && <BranchesView />}
           {view === 'customers' && <CustomersView />}
@@ -518,7 +518,7 @@ function ReservationsView() {
         <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
       ) : (
         <div style={{ overflowX: 'auto', border: '1px solid #EEE', borderRadius: 12, background: '#fff' }}>
-          <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', tableLayout: 'auto', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>
                 {['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '희망 예산', '시술이력', '상태', '접수일자'].map(h => (
@@ -644,9 +644,9 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
       {cell(p.birthDate || '-', { color: '#555' })}
       {cell(genderKo(p.gender), { color: '#555' })}
       {cell(<VisitPill v={p.visitType} />)}
-      {cell(p.treatmentRequest || '-')}
+      {cell(p.treatmentRequest || '-', { whiteSpace: 'normal', minWidth: 120 })}
       {cell(p.budget || '-', { color: '#555' })}
-      {cell(p.surgeryHistory || '-', { color: '#555' })}
+      {cell(p.surgeryHistory || '-', { color: '#555', whiteSpace: 'normal', minWidth: 110 })}
       {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />)}
       {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888' })}
     </>
