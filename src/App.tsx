@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { adminApi } from './api'
-import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo } from './api'
+import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe } from './api'
 
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
@@ -55,11 +55,13 @@ const NAV: { key: View; label: string }[] = [
 function AdminShell({ session }: { session: Session | null }) {
   const [view, setView] = useState<View>('reservations')
   const [access, setAccess] = useState<'checking' | 'ok' | 'forbidden'>('checking')
+  const [me, setMe] = useState<AdminMe | null>(null)
   useEffect(() => {
-    adminApi.getBranches()
-      .then(() => setAccess('ok'))
+    adminApi.getMe()
+      .then((m) => { setMe(m); setAccess('ok') })
       .catch((e: any) => setAccess(String(e?.message || '').includes('승인') ? 'forbidden' : 'ok'))
   }, [])
+  const isBranch = me?.role === 'branch'
 
   if (access === 'checking') return <Center>불러오는 중…</Center>
   if (access === 'forbidden') return (
@@ -90,8 +92,8 @@ function AdminShell({ session }: { session: Session | null }) {
       </aside>
       <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', background: '#F7F8FA' }}>
         <div style={{ maxWidth: view === 'reservations' ? '100%' : 760, margin: '0 auto' }}>
-          {view === 'reservations' && <ReservationsView />}
-          {view === 'branches' && <BranchesView />}
+          {view === 'reservations' && <ReservationsView isBranch={isBranch} />}
+          {view === 'branches' && <BranchesView isBranch={isBranch} />}
           {view === 'customers' && <CustomersView />}
         </div>
       </main>
@@ -407,7 +409,7 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
   )
 }
 
-function ReservationsView() {
+function ReservationsView({ isBranch }: { isBranch?: boolean }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -516,10 +518,12 @@ function ReservationsView() {
     <div>
       {/* 1줄: 병원 · 날짜 범위 · 이름 검색 · 새로고침 */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '16px 0 12px' }}>
-        <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
-          <option value="">전체 병원</option>
-          {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
-        </select>
+        {!isBranch && (
+          <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
+            <option value="">전체 병원</option>
+            {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
+          </select>
+        )}
         <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
         <input
           value={query}
@@ -813,7 +817,7 @@ function Txt({ value, onChange, disabled, placeholder, type }: { value: string; 
   return <input type={type || 'text'} value={value} disabled={disabled} placeholder={placeholder} onChange={e => onChange(e.target.value)} style={{ ...inputStyle, background: disabled ? '#F3F4F6' : '#fff' }} />
 }
 
-function BranchesView() {
+function BranchesView({ isBranch }: { isBranch?: boolean }) {
   const [list, setList] = useState<AdminBranch[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<AdminBranch | null>(null)        // 상세(보기)
@@ -822,7 +826,7 @@ function BranchesView() {
   const load = () => { setLoading(true); adminApi.getAdminBranches().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }
   useEffect(() => { load() }, [])
 
-  if (editing) return <BranchForm init={editing.b} isNew={editing.isNew}
+  if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} canDelete={!isBranch}
     onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); setSelected(saved); load() }} />
   if (selected) return <BranchDetail b={selected} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
   if (loading) return <Center small>불러오는 중…</Center>
@@ -830,7 +834,7 @@ function BranchesView() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0' }}>
         <h2 style={{ fontSize: 16, margin: 0 }}>병원 ({list.length})</h2>
-        <button onClick={() => setEditing({ b: emptyBranch(), isNew: true })} style={primaryBtn}>+ 새 병원</button>
+        {!isBranch && <button onClick={() => setEditing({ b: emptyBranch(), isNew: true })} style={primaryBtn}>+ 새 병원</button>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {list.map(b => (
@@ -1016,7 +1020,7 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
   )
 }
 
-function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNew: boolean; onClose: () => void; onSaved: (saved: AdminBranch | null) => void }) {
+function BranchForm({ init, isNew, canDelete, onClose, onSaved }: { init: AdminBranch; isNew: boolean; canDelete?: boolean; onClose: () => void; onSaved: (saved: AdminBranch | null) => void }) {
   const [b, setB] = useState<AdminBranch>(init)
   const [busy, setBusy] = useState(false)
   const set = (k: keyof AdminBranch, v: any) => setB(prev => ({ ...prev, [k]: v }))
@@ -1066,7 +1070,7 @@ function BranchForm({ init, isNew, onClose, onSaved }: { init: AdminBranch; isNe
 
       <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
         <button disabled={busy} onClick={save} style={{ ...primaryBtn, flex: 1, padding: '12px' }}>{busy ? '저장 중…' : '저장'}</button>
-        {!isNew && <button disabled={busy} onClick={del} style={{ padding: '12px 18px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontWeight: 700, cursor: 'pointer' }}>삭제</button>}
+        {!isNew && canDelete && <button disabled={busy} onClick={del} style={{ padding: '12px 18px', borderRadius: 8, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', fontWeight: 700, cursor: 'pointer' }}>삭제</button>}
       </div>
     </div>
   )

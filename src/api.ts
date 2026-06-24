@@ -80,7 +80,10 @@ export type ManagerProposeInfo = {
   targetDate?: string
 }
 
+export type AdminMe = { role: 'super' | 'branch'; branchId: string | null }
+
 export const adminApi = {
+  getMe: (): Promise<AdminMe> => adminGet('admin-me'),
   getBranches: (): Promise<Branch[]> => adminGet('admin-branches'),
   getReservations: (branchId?: string): Promise<Booking[]> =>
     adminGet('admin-reservations', branchId ? { branchId } : {}),
