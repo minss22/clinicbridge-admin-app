@@ -133,7 +133,7 @@ const TABS: { key: Tab; label: string }[] = [
 ]
 // 탭별 색 (배경=연한 색 / 글씨=상태 색). 전체=초록 배경+흰 글씨(활성).
 const TAB_COLOR: Record<Tab, { bg: string; fg: string }> = {
-  action: STATUS_COLOR.pending,
+  action: { bg: '#FDE047', fg: '#854D0E' },   // 활성 시 노란 배경
   pending: STATUS_COLOR.pending,
   proposed: STATUS_COLOR.rescheduling,
   reschedule: STATUS_COLOR.reschedule_req,
@@ -536,11 +536,13 @@ function ReservationsView() {
             const count = bookings.filter(b => matchTab(b, t.key)).length
             const active = tab === t.key
             const c = TAB_COLOR[t.key]
-            const style: React.CSSProperties = t.key === 'action'
-              ? { padding: '8px 14px', borderRadius: 999, border: '1.5px solid transparent', background: '#FDE047', color: '#713F12', fontSize: 13, fontWeight: active ? 800 : 700, cursor: 'pointer' }
-              : { padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }
             return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={style}>
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                padding: '8px 14px', borderRadius: 999,
+                border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
+                background: active ? c.bg : 'transparent', color: active ? c.fg : '#333',
+                fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
+              }}>
                 {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
               </button>
             )
