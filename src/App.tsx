@@ -122,8 +122,8 @@ function Login() {
 // ── 대시보드 ──────────────────────────────────────────────────
 type Tab = 'action' | 'pending' | 'proposed' | 'reschedule' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'action', label: '처리 대기' },          // 대기+시간조정중+일시변경요청 묶음
-  { key: 'pending', label: '대기' },
+  { key: 'action', label: '처리 대기' },          // 예약 접수+시간조정중+일시변경요청 묶음
+  { key: 'pending', label: '예약 접수' },
   { key: 'proposed', label: '시간 조정 중' },
   { key: 'reschedule', label: '일시변경 요청' },
   { key: 'confirmed', label: '확정' },
@@ -536,13 +536,11 @@ function ReservationsView() {
             const count = bookings.filter(b => matchTab(b, t.key)).length
             const active = tab === t.key
             const c = TAB_COLOR[t.key]
+            const style: React.CSSProperties = t.key === 'action'
+              ? { padding: '8px 14px', borderRadius: 999, border: '1.5px solid transparent', background: 'transparent', color: '#CA8A04', fontSize: 13, fontWeight: active ? 800 : 600, cursor: 'pointer' }
+              : { padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }
             return (
-              <button key={t.key} onClick={() => setTab(t.key)} style={{
-                padding: '8px 14px', borderRadius: 999,
-                border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
-                background: active ? c.bg : 'transparent', color: active ? c.fg : '#333',
-                fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
-              }}>
+              <button key={t.key} onClick={() => setTab(t.key)} style={style}>
                 {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
               </button>
             )
@@ -727,8 +725,8 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
       {/* 신규 예약 / 시간변경 요청 — 확정 / 거절 / 다른 시간 제안 */}
       {(isReschedulePending(b) || isNewPending(b)) && (
         <>
-          <div style={actionBar('#FFFBEB')}>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
+          <div style={actionBar(isReschedulePending(b) ? '#DBEAFE' : '#FFFBEB')}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: isReschedulePending(b) ? '#1E40AF' : '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
             {!proposing ? (
               <>
                 <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={confirmBtn}>확정</button>
