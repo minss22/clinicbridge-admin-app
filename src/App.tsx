@@ -537,7 +537,7 @@ function ReservationsView() {
             const active = tab === t.key
             const c = TAB_COLOR[t.key]
             const style: React.CSSProperties = t.key === 'action'
-              ? { padding: '8px 14px', borderRadius: 999, border: '1.5px solid transparent', background: 'transparent', color: '#CA8A04', fontSize: 13, fontWeight: active ? 800 : 600, cursor: 'pointer' }
+              ? { padding: '8px 14px', borderRadius: 999, border: '1.5px solid transparent', background: '#FDE047', color: '#713F12', fontSize: 13, fontWeight: active ? 800 : 700, cursor: 'pointer' }
               : { padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }
             return (
               <button key={t.key} onClick={() => setTab(t.key)} style={style}>
@@ -725,7 +725,7 @@ function BookingRows({ b, busy, act, reload }: { b: Booking; busy: string | null
       {/* 신규 예약 / 시간변경 요청 — 확정 / 거절 / 다른 시간 제안 */}
       {(isReschedulePending(b) || isNewPending(b)) && (
         <>
-          <div style={actionBar(isReschedulePending(b) ? '#DBEAFE' : '#FFFBEB')}>
+          <div style={actionBar(isReschedulePending(b) ? '#EFF6FF' : '#FFFBEB')}>
             <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: isReschedulePending(b) ? '#1E40AF' : '#92400E' }}>{isReschedulePending(b) ? `🔁 일시변경 요청 → ${dot(b.requestedDate)} ${b.requestedTime}` : '🆕 신규 예약 승인 대기'}</span>
             {!proposing ? (
               <>
