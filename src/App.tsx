@@ -88,7 +88,7 @@ function AdminShell({ session }: { session: Session | null }) {
           {session && <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, padding: '6px 10px', fontSize: 12 }}>로그아웃</button>}
         </div>
       </aside>
-      <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px' }}>
+      <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', background: '#F7F8FA' }}>
         <div style={{ maxWidth: view === 'reservations' ? '100%' : 760, margin: '0 auto' }}>
           {view === 'reservations' && <ReservationsView />}
           {view === 'branches' && <BranchesView />}
