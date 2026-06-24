@@ -5,7 +5,7 @@ import { adminApi } from './api'
 import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo } from './api'
 
 const STATUS_KO: Record<string, string> = {
-  pending: '대기', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
+  pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
   reschedule_req: '일시변경 요청', rescheduling: '시간 조정 중',
 }
 const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
