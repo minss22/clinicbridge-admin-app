@@ -427,6 +427,8 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
   const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
   const [sortKey, setSortKey] = useState<string>('created')        // 정렬 컬럼
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')   // 정렬 방향
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  const [dayDrawer, setDayDrawer] = useState<{ date: string; bookings: Booking[] } | null>(null)
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -521,72 +523,76 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
 
   return (
     <div>
-      {/* 1줄: 병원 · 날짜 범위 · 이름 검색 · 새로고침 */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '16px 0 12px' }}>
+      {/* 상단: 리스트/캘린더 전환 · 병원 · 새로고침 */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '16px 0 12px' }}>
+        <div style={{ display: 'inline-flex', border: '1px solid #DDD', borderRadius: 8, overflow: 'hidden' }}>
+          {(['list', 'calendar'] as const).map(m => (
+            <button key={m} onClick={() => setViewMode(m)} style={{ padding: '0 16px', height: 38, border: 'none', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, background: viewMode === m ? '#1D9E75' : '#fff', color: viewMode === m ? '#fff' : '#666' }}>{m === 'list' ? '리스트' : '캘린더'}</button>
+          ))}
+        </div>
         {!isBranch && (
           <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
             <option value="">전체 병원</option>
             {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
           </select>
         )}
-        <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="예약 시간 범위">
-          <span style={{ fontSize: 14 }}>🕐</span>
-          <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput} />
-          <span style={{ color: '#999' }}>~</span>
-          <input type="time" value={toTime} onChange={e => setToTime(e.target.value)} style={tInput} />
-          {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime('') }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
-        </div>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="이름 검색 (LINE·로마자·한국식)"
-          style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}
-        />
+        <div style={{ flex: 1 }} />
         <button onClick={() => load()} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
       </div>
-      {/* 2줄: 상태 탭 (정렬은 컬럼 헤더 클릭) */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-        {TABS.map(t => {
-          const count = bookings.filter(b => matchTab(b, t.key)).length
-          const active = tab === t.key
-          const c = TAB_COLOR[t.key]
-          const actionActive = t.key === 'action' && active   // 처리 대기 활성: 테두리 없이 흰 글씨
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '8px 14px', borderRadius: 999,
-              border: actionActive ? 'none' : `1.5px solid ${active ? c.fg : '#E5E7EB'}`,
-              background: active ? c.bg : 'transparent', color: active ? c.fg : '#333',
-              fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer',
-            }}>
-              {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
-            </button>
-          )
-        })}
-      </div>
 
-      {loading ? (
-        <Center small>불러오는 중…</Center>
-      ) : filtered.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
+      {viewMode === 'calendar' ? (
+        <CalendarView bookings={bookings} onOpenDay={(date, list) => setDayDrawer({ date, bookings: list })} />
       ) : (
-        <div>
-          {/* 컬럼 헤더 (클릭 정렬) */}
-          <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
-            {RES_HEADERS.map((h, i) => {
-              const sk = RES_SORT[i]; const on = !!sk && sortKey === sk
-              return <div key={i} onClick={() => clickHeader(sk)} style={{ ...headCell, textAlign: RES_ALIGN[i], cursor: sk ? 'pointer' : 'default', color: on ? '#1D9E75' : '#888', userSelect: 'none' }}>{h}{on ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}</div>
+        <>
+          {/* 검색: 날짜 범위 · 시간 범위 · 이름 */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="예약 시간 범위">
+              <span style={{ fontSize: 14 }}>🕐</span>
+              <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput} />
+              <span style={{ color: '#999' }}>~</span>
+              <input type="time" value={toTime} onChange={e => setToTime(e.target.value)} style={tInput} />
+              {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime('') }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
+            </div>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
+          </div>
+          {/* 상태 탭 (정렬은 컬럼 헤더 클릭) */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            {TABS.map(t => {
+              const count = bookings.filter(b => matchTab(b, t.key)).length
+              const active = tab === t.key
+              const c = TAB_COLOR[t.key]
+              const actionActive = t.key === 'action' && active
+              return (
+                <button key={t.key} onClick={() => setTab(t.key)} style={{ padding: '8px 14px', borderRadius: 999, border: actionActive ? 'none' : `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }}>
+                  {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
+                </button>
+              )
             })}
           </div>
-          {/* 카드 목록 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-            {sorted.map(b => <BookingRow key={b.groupId} b={b} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
-          </div>
-        </div>
+          {loading ? (
+            <Center small>불러오는 중…</Center>
+          ) : filtered.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
+          ) : (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
+                {RES_HEADERS.map((h, i) => {
+                  const sk = RES_SORT[i]; const on = !!sk && sortKey === sk
+                  return <div key={i} onClick={() => clickHeader(sk)} style={{ ...headCell, textAlign: RES_ALIGN[i], cursor: sk ? 'pointer' : 'default', color: on ? '#1D9E75' : '#888', userSelect: 'none' }}>{h}{on ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}</div>
+                })}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+                {sorted.map(b => <BookingRow key={b.groupId} b={b} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {proposeTarget && <ProposeModal booking={proposeTarget} onClose={() => setProposeTarget(null)} onDone={() => { setProposeTarget(null); load(true) }} />}
       {drawerTarget && <ReservationDrawer booking={drawerTarget} busy={busy} act={act} onPropose={() => setProposeTarget(drawerTarget)} onClose={() => setDrawerTarget(null)} />}
+      {dayDrawer && <DayDrawer date={dayDrawer.date} bookings={dayDrawer.bookings} onClose={() => setDayDrawer(null)} onOpenBooking={(b) => { setDayDrawer(null); setDrawerTarget(b) }} />}
 
       {rejectTarget && (
         <div onClick={() => { if (!busy) setRejectTarget(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
@@ -837,6 +843,100 @@ function ReservationDrawer({ booking, busy, act, onPropose, onClose }: { booking
             ))}
           </div>
         )}
+      </aside>
+    </div>
+  )
+}
+
+// 캘린더 셀/타임라인 상태 짧은 라벨
+const STATUS_SHORT: Record<string, string> = { pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료', reschedule_req: '변경', rescheduling: '조정' }
+
+// 예약 관리 — 캘린더 뷰 (예약일 기준, 날짜별 상태 건수)
+function CalendarView({ bookings, onOpenDay }: { bookings: Booking[]; onOpenDay: (date: string, list: Booking[]) => void }) {
+  const [ym, setYm] = useState(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7))
+  const [y, m] = ym.split('-').map(Number)
+  const startDow = new Date(y, m - 1, 1).getDay()
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const cells: (string | null)[] = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
+  const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); setYm(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
+  const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+
+  // 날짜 → 예약(예약일 기준), 취소·거절 제외하고 표시
+  const byDate: Record<string, Booking[]> = {}
+  for (const b of bookings) {
+    if (b.booker.status === 'cancelled' || b.booker.status === 'rejected') continue
+    ;(byDate[b.date] ??= []).push(b)
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, padding: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <button onClick={() => shift(-1)} style={navBtnB}>‹</button>
+        <b style={{ fontSize: 15 }}>{y}년 {m}월</b>
+        <button onClick={() => shift(1)} style={navBtnB}>›</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4, marginBottom: 4 }}>
+        {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 12, fontWeight: 600, color: i === 0 ? '#E53E3E' : i === 6 ? '#3B82F6' : '#999' }}>{d}</div>)}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+        {cells.map((ds, i) => {
+          if (!ds) return <div key={i} />
+          const list = byDate[ds] || []
+          // 상태별 건수
+          const counts: Record<string, number> = {}
+          for (const b of list) { const s = bookerDisplayStatus(b); counts[s] = (counts[s] || 0) + 1 }
+          const isToday = ds === todayStr
+          return (
+            <button key={i} type="button" onClick={() => list.length && onOpenDay(ds, list)} style={{
+              minHeight: 84, borderRadius: 8, padding: '6px 6px', textAlign: 'left', cursor: list.length ? 'pointer' : 'default',
+              border: `1.5px solid ${isToday ? '#1D9E75' : '#EEE'}`, background: '#fff', display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden',
+            }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#333' }}>{Number(ds.slice(8))}</div>
+              {Object.entries(counts).map(([s, n]) => {
+                const c = STATUS_COLOR[s] ?? STATUS_COLOR.pending
+                return <span key={s} style={{ fontSize: 10.5, fontWeight: 700, color: c.fg, background: c.bg, borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap' }}>{STATUS_SHORT[s] ?? s} {n}</span>
+              })}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// 날짜별 예약 타임라인 — 우측 드로어
+function DayDrawer({ date, bookings, onClose, onOpenBooking }: { date: string; bookings: Booking[]; onClose: () => void; onOpenBooking: (b: Booking) => void }) {
+  const sorted = [...bookings].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', justifyContent: 'flex-end', zIndex: 55, fontFamily: 'system-ui, sans-serif' }}>
+      <aside onClick={e => e.stopPropagation()} style={{ width: 'min(420px, 92vw)', height: '100dvh', background: '#fff', boxShadow: '-4px 0 20px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid #EEE' }}>
+          <b style={{ fontSize: 16 }}>{dot(date)} 예약 ({sorted.length})</b>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#888', cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
+          {sorted.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>예약이 없습니다.</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {sorted.map(b => {
+                const s = bookerDisplayStatus(b)
+                const c = STATUS_COLOR[s] ?? STATUS_COLOR.pending
+                return (
+                  <button key={b.groupId} type="button" onClick={() => onOpenBooking(b)} style={{ display: 'flex', gap: 10, alignItems: 'stretch', padding: '10px 0', border: 'none', borderBottom: '1px solid #F2F2F2', background: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ width: 52, flexShrink: 0, fontSize: 13, fontWeight: 700, color: '#333' }}>{b.time}</div>
+                    <div style={{ width: 4, borderRadius: 2, background: c.fg, flexShrink: 0 }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.booker.nameKo || b.booker.name}</div>
+                      <div style={{ fontSize: 12.5, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.booker.treatmentRequest || '-'}</div>
+                    </div>
+                    <span style={{ alignSelf: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg, borderRadius: 6, padding: '2px 7px' }}>{STATUS_SHORT[s] ?? s}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </aside>
     </div>
   )
