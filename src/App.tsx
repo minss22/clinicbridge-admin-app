@@ -75,7 +75,7 @@ function AdminShell({ session }: { session: Session | null }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100dvh', fontFamily: 'system-ui, sans-serif' }}>
-      <aside style={{ width: 180, flexShrink: 0, borderRight: '1px solid #EEE', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 0, height: '100dvh', boxSizing: 'border-box' }}>
+      <aside style={{ width: 180, flexShrink: 0, background: '#fff', borderRight: '1px solid #EEE', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 0, height: '100dvh', boxSizing: 'border-box' }}>
         <div style={{ fontSize: 16, fontWeight: 800, padding: '4px 10px 16px' }}>관리자</div>
         {NAV.map(n => (
           <button key={n.key} onClick={() => setView(n.key)} style={{
