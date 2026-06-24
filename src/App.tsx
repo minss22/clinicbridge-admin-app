@@ -949,6 +949,7 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
   for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
   const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); setYm(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
   const closedSet = new Set(b.holidayDates)
+  const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)  // KST/JST 오늘
   const selSlots = sel ? computeSlotsClient(b, sel) : []
 
   return (
@@ -968,10 +969,11 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
           const holName = holidays.get(ds)
           const hasBlocked = b.blockedSlots.some(s => s.startsWith(ds + ' '))
           const selected = sel === ds
+          const isToday = ds === todayStr
           return (
             <button type="button" key={i} onClick={() => setSel(ds)} style={{
               position: 'relative', minHeight: 46, borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
-              border: `1.5px solid ${selected ? '#111' : 'transparent'}`,
+              border: `1.5px solid ${selected ? '#111' : isToday ? '#1D9E75' : 'transparent'}`,
               background: closed ? '#FEE2E2' : 'transparent',
               color: closed ? '#B91C1C' : holName ? '#E53E3E' : '#333', fontWeight: closed ? 700 : 400,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
