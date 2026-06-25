@@ -19,15 +19,6 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> =
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
-// 시간 검색값을 30분 단위로 보정 (피커/직접입력 어느 쪽이든) — 'HH:MM' → 가까운 00/30
-const snap30 = (v: string): string => {
-  if (!v) return ''
-  const [h, m] = v.split(':').map(Number)
-  if (Number.isNaN(h) || Number.isNaN(m)) return ''
-  let total = Math.round((h * 60 + m) / 30) * 30
-  if (total >= 1440) total = 1410   // 23:30 상한 (다음날로 넘기지 않음)
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
-}
 
 // 개발용: true면 로그인 없이 바로 대시보드 (백엔드 ADMIN_AUTH_DISABLED와 함께 사용)
 const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
@@ -558,9 +549,9 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
             <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="예약 시간 범위">
               <span style={{ fontSize: 14 }}>🕐</span>
-              <input type="time" step={1800} value={fromTime} onChange={e => setFromTime(snap30(e.target.value))} style={tInput} />
+              <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput} />
               <span style={{ color: '#999' }}>~</span>
-              <input type="time" step={1800} value={toTime} onChange={e => setToTime(snap30(e.target.value))} style={tInput} />
+              <input type="time" value={toTime} onChange={e => setToTime(e.target.value)} style={tInput} />
               {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime('') }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
             </div>
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
