@@ -1000,12 +1000,13 @@ function BranchesView({ isBranch }: { isBranch?: boolean }) {
   const [selected, setSelected] = useState<AdminBranch | null>(null)        // 상세(보기)
   const [editing, setEditing] = useState<{ b: AdminBranch; isNew: boolean } | null>(null)  // 수정/생성
 
-  const load = () => { setLoading(true); adminApi.getAdminBranches().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }
+  // 병원 관리자는 목록 없이 자기 병원 상세로 바로 진입 (병원 1곳 자동 선택)
+  const load = () => { setLoading(true); adminApi.getAdminBranches().then(l => { setList(l); if (isBranch && l.length) setSelected(s => s ?? l[0]) }).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }
   useEffect(() => { load() }, [])
 
   if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} canDelete={!isBranch}
     onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); setSelected(saved); load() }} />
-  if (selected) return <BranchDetail b={selected} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
+  if (selected) return <BranchDetail b={selected} hideBack={isBranch} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
   if (loading) return <Center small>불러오는 중…</Center>
   return (
     <div>
@@ -1026,7 +1027,7 @@ function BranchesView({ isBranch }: { isBranch?: boolean }) {
   )
 }
 
-function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void }) {
+function BranchDetail({ b, onBack, onEdit, onChanged, hideBack }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void; hideBack?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [holidays, setHolidays] = useState<Map<string, string>>(new Map())
   // 일정(휴무 요일/점심 없는 요일/휴무일/마감시간)은 상세에서 바로 편집
@@ -1052,7 +1053,7 @@ function BranchDetail({ b, onBack, onEdit, onChanged }: { b: AdminBranch; onBack
 
   return (
     <div style={{ margin: '16px 0' }}>
-      <button onClick={onBack} style={ghostBtn}>← 목록</button>
+      {!hideBack && <button onClick={onBack} style={ghostBtn}>← 목록</button>}
       <div style={{ margin: '10px 0 16px' }}>
         <h2 style={{ fontSize: 20, margin: 0 }}>{b.name}</h2>
         <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{b.nameJa}</div>
