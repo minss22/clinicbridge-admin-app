@@ -159,6 +159,13 @@ const isNewPending = (b: Booking) => b.booker.status === 'pending' && !b.request
 // 예약자 배지 상태: 고객 일시변경 요청='일시변경 요청', 병원 제안 대기='시간 조정 중'
 const bookerDisplayStatus = (b: Booking) =>
   isReschedulePending(b) ? 'reschedule_req' : isClinicProposed(b) ? 'rescheduling' : b.booker.status
+// 동반자 배지 상태: 그룹 전체가 일시변경/제안 중이면(=같은 group_id로 함께 묶여 대기)
+// 대기(pending) 동반자도 예약자와 동일하게 표시. 단, 확정 예약에 나중에 추가돼 승인 대기 중인
+// 동반자(예약자는 확정 상태)는 별개 건이므로 자기 status('접수') 그대로 표시.
+const companionDisplayStatus = (b: Booking, p: Person) =>
+  p.status === 'pending' && (isReschedulePending(b) || isClinicProposed(b))
+    ? bookerDisplayStatus(b)
+    : p.status
 
 // 매니저 예약 처리 페이지 (로그인 없음 · LINE 알림의 단일 버튼으로 진입)
 // 한 화면에서 확정 / 거절 / 다른 시간 제안.
@@ -752,7 +759,7 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
       {cell(genderKo(p.gender), { color: '#555', textAlign: 'center' })}
       {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
-      {cell(<StatusBadge status={isComp ? p.status : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
+      {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
       {cell(isComp ? '' : actionCol(), { overflow: 'visible' })}
     </div>
@@ -828,7 +835,7 @@ function ReservationDrawer({ booking, busy, act, onPropose, onClose }: { booking
           {isReschedulePending(b) && <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#1E40AF', marginBottom: 8 }}>🔁 일시변경 요청 → {dot(b.requestedDate)} {b.requestedTime}</div>}
           {isClinicProposed(b) && <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#9A3412', marginBottom: 8 }}>🕒 시간 제안 후 고객 응답 대기 → {dot(b.requestedDate)} ({(b.proposedTimes || []).join(', ')})</div>}
           <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} expanded />
-          {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus expanded />)}
+          {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus displayStatus={companionDisplayStatus(b, c)} expanded />)}
         </div>
         {(canAct || isClinicProposed(b) || hasCompPending) && (
           <div style={{ borderTop: '1px solid #EEE', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1319,7 +1326,7 @@ function ReadonlyBooking({ b }: { b: Booking }) {
     <div style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 14, padding: 16 }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444', marginBottom: 4 }}>{b.branchName} · {dot(b.date)} {b.time}</div>
       <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} />
-      {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus />)}
+      {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus displayStatus={companionDisplayStatus(b, c)} />)}
     </div>
   )
 }
