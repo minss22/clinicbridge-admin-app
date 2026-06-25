@@ -19,6 +19,8 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> =
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
+// 시간 검색용 — 24시간제 30분 단위 (00:00 … 23:30)
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
 
 // 개발용: true면 로그인 없이 바로 대시보드 (백엔드 ADMIN_AUTH_DISABLED와 함께 사용)
 const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
@@ -549,9 +551,15 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
             <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="예약 시간 범위">
               <span style={{ fontSize: 14 }}>🕐</span>
-              <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput} />
+              <select value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput}>
+                <option value="">시작</option>
+                {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
               <span style={{ color: '#999' }}>~</span>
-              <input type="time" value={toTime} onChange={e => setToTime(e.target.value)} style={tInput} />
+              <select value={toTime} onChange={e => setToTime(e.target.value)} style={tInput}>
+                <option value="">종료</option>
+                {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
               {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime('') }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
             </div>
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
@@ -559,7 +567,8 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
           {/* 상태 탭 (정렬은 컬럼 헤더 클릭) */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
             {TABS.map(t => {
-              const count = bookings.filter(b => matchTab(b, t.key)).length
+              // 탭 건수도 현재 날짜·시간·이름 검색 조건을 반영
+              const count = bookings.filter(b => matchTab(b, t.key) && matchName(b) && matchDate(b) && matchTime(b)).length
               const active = tab === t.key
               const c = TAB_COLOR[t.key]
               const actionActive = t.key === 'action' && active
@@ -575,15 +584,15 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
           ) : filtered.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
           ) : (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '6px 17px 10px', borderBottom: '1px solid #E5E7EB' }}>
+            <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
                 {RES_HEADERS.map((h, i) => {
                   const sk = RES_SORT[i]; const on = !!sk && sortKey === sk
                   return <div key={i} onClick={() => clickHeader(sk)} style={{ ...headCell, textAlign: RES_ALIGN[i], cursor: sk ? 'pointer' : 'default', color: on ? '#1D9E75' : '#888', userSelect: 'none' }}>{h}{on ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}</div>
                 })}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-                {sorted.map(b => <BookingRow key={b.groupId} b={b} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
+              <div>
+                {sorted.map((b, i) => <BookingRow key={b.groupId} b={b} last={i === sorted.length - 1} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
               </div>
             </div>
           )}
@@ -647,8 +656,9 @@ function VisitPill({ v }: { v: string }) {
   }}>{visitKo(v)}</span>
 }
 
-function PersonDetail({ label, p, showStatus, displayStatus }: { label: string; p: Person; showStatus?: boolean; displayStatus?: string }) {
+function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label: string; p: Person; showStatus?: boolean; displayStatus?: string; expanded?: boolean }) {
   const [more, setMore] = useState(false)
+  const open = expanded || more   // expanded=항상 전체 정보 표시(더보기 없음)
   const st = displayStatus ?? p.status
   const sc = STATUS_COLOR[st] ?? STATUS_COLOR.pending
   const moreBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#1D9E75', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, flexShrink: 0, whiteSpace: 'nowrap' }
@@ -661,30 +671,32 @@ function PersonDetail({ label, p, showStatus, displayStatus }: { label: string; 
   }
   return (
     <div style={{ border: '1px solid #EFEFEF', borderLeft: `5px solid ${sc.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* 1줄: 이름 · 생년월일 · 성별  +  상태 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>
-          <span style={{ fontSize: 11, color: '#777', background: '#EEE', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>{label}</span>
-          <b style={{ fontSize: 14, color: '#111' }}>{p.nameKo || p.name}</b>
-          {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}
-          {' · '}{p.birthDate || '-'}{' · '}{genderKo(p.gender)}
+      {/* 1줄: 이름(한국식) / 로마자(아랫줄) / 생년월일·성별  +  상태 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.4 }}>
+          <span>
+            <span style={{ fontSize: 11, color: '#777', background: '#EEE', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>{label}</span>
+            <b style={{ fontSize: 14, color: '#111' }}>{p.nameKo || p.name}</b>
+          </span>
+          {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>{p.name}</span>}
+          <span style={{ fontSize: 12.5, color: '#666' }}>{p.birthDate || '-'} · {genderKo(p.gender)}</span>
         </div>
         {showStatus && <StatusBadge status={st} />}
       </div>
 
-      {/* 2줄: 초진/재진(동그라미) + 희망시술  +  더보기(오른쪽 끝) */}
+      {/* 2줄: 초진/재진(동그라미) + 희망시술  +  더보기(오른쪽 끝, expanded면 숨김) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
           <span style={visitPill}>{visitKo(p.visitType)}</span>
-          <span style={{ fontSize: 13, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 13, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: expanded ? 'normal' : 'nowrap' }}>
             <span style={kStyle}>희망시술</span>{p.treatmentRequest || '-'}
           </span>
         </div>
-        <button onClick={() => setMore(v => !v)} style={moreBtn}>{more ? '접기 ▴' : '더보기 ▾'}</button>
+        {!expanded && <button onClick={() => setMore(v => !v)} style={moreBtn}>{more ? '접기 ▴' : '더보기 ▾'}</button>}
       </div>
 
-      {/* 더보기: 희망예산 · 시술이력 */}
-      {more && (
+      {/* 희망예산 · 시술이력 (expanded면 항상, 아니면 더보기 시) */}
+      {open && (
         <div style={{ borderTop: '1px dashed #EEE', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ fontSize: 13, color: '#333' }}><span style={kStyle}>희망예산</span>{p.budget || '-'}</div>
           <div style={{ fontSize: 13, color: '#333' }}><span style={kStyle}>시술이력</span>{p.surgeryHistory || '-'}</div>
@@ -700,7 +712,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // 예약 한 건 = 카드 한 줄(예약자) + 동반자 줄. 행 클릭 → 상세 드로어. 우측 액션 열.
-function BookingRow({ b, busy, act, onPropose, onOpen }: { b: Booking; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; onPropose: () => void; onOpen: () => void }) {
+function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; last?: boolean; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; onPropose: () => void; onOpen: () => void }) {
   const compBatches = pendingCompanionBatches(b)
   const disabled = busy === b.booker.id
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
@@ -739,7 +751,11 @@ function BookingRow({ b, busy, act, onPropose, onOpen }: { b: Booking; busy: str
             {isClinicProposed(b) && <span style={{ fontSize: 10.5, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
           </div>, { textAlign: 'center', whiteSpace: 'normal' })}
       {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center' })}
-      {cell(<span><b style={{ color: isComp ? '#222' : '#111' }}>{p.nameKo || p.name}</b> {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>({p.name})</span>}</span>, { textAlign: 'center' })}
+      {cell(
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+          <b style={{ color: isComp ? '#222' : '#111' }}>{p.nameKo || p.name}</b>
+          {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 11.5 }}>{p.name}</span>}
+        </div>, { textAlign: 'center', whiteSpace: 'normal' })}
       {cell(p.birthDate || '-', { color: '#555', textAlign: 'center' })}
       {cell(genderKo(p.gender), { color: '#555', textAlign: 'center' })}
       {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
@@ -751,7 +767,7 @@ function BookingRow({ b, busy, act, onPropose, onOpen }: { b: Booking; busy: str
   )
 
   return (
-    <div onClick={onOpen} style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden', cursor: 'pointer' }}>
+    <div onClick={onOpen} style={{ background: '#fff', cursor: 'pointer', ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
       {personRow(b.booker, false)}
       {b.companions.map((c, i) => personRow(c, true, i))}
     </div>
@@ -819,8 +835,8 @@ function ReservationDrawer({ booking, busy, act, onPropose, onClose }: { booking
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px 20px' }}>
           {isReschedulePending(b) && <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#1E40AF', marginBottom: 8 }}>🔁 일시변경 요청 → {dot(b.requestedDate)} {b.requestedTime}</div>}
           {isClinicProposed(b) && <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#9A3412', marginBottom: 8 }}>🕒 시간 제안 후 고객 응답 대기 → {dot(b.requestedDate)} ({(b.proposedTimes || []).join(', ')})</div>}
-          <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} />
-          {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus />)}
+          <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} expanded />
+          {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus expanded />)}
         </div>
         {(canAct || isClinicProposed(b) || hasCompPending) && (
           <div style={{ borderTop: '1px solid #EEE', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
