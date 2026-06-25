@@ -54,6 +54,7 @@ export type Booking = {
   requestedTime: string | null
   proposedBy: 'customer' | 'clinic' | null
   proposedTimes: string[]
+  memo?: string          // 예약 단위 고객 메모(한국어 번역)
   booker: Person
   companions: Person[]
 }
@@ -77,7 +78,7 @@ export type ManagerProposeInfo = {
   status?: string; canPropose?: boolean; proposedTimes?: string[]
   currentDate?: string; currentTime?: string
   requestedDate?: string | null; requestedTime?: string | null
-  targetDate?: string
+  targetDate?: string; memo?: string
 }
 
 export type AdminMe = { role: 'super' | 'branch'; branchId: string | null }

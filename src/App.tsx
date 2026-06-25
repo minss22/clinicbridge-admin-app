@@ -261,6 +261,7 @@ function ManagerActionPage({ reservationId }: { reservationId: string }) {
       <div style={{ background: '#F8F9FB', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#555', marginBottom: 16, lineHeight: 1.7 }}>
         <div>현재 예약: {dot(info.currentDate)} {info.currentTime}</div>
         {info.requestedDate && <div style={{ color: '#9A3412', fontWeight: 700 }}>고객 변경요청: {dot(info.requestedDate)} {info.requestedTime}</div>}
+        {info.memo && <div style={{ marginTop: 4, color: '#92400E', whiteSpace: 'pre-wrap' }}>📝 메모: {info.memo}</div>}
       </div>
 
       {err && <p style={{ color: '#E53E3E', fontSize: 13, marginBottom: 10 }}>{err}</p>}
@@ -839,6 +840,10 @@ function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, read
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px 20px' }}>
           {isReschedulePending(b) && <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#1E40AF', marginBottom: 8 }}>🔁 일시변경 요청 → {dot(b.requestedDate)} {b.requestedTime}</div>}
           {isClinicProposed(b) && <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#9A3412', marginBottom: 8 }}>🕒 시간 제안 후 고객 응답 대기 → {dot(b.requestedDate)} ({(b.proposedTimes || []).join(', ')})</div>}
+          {b.memo && <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#92400E', marginBottom: 3 }}>📝 고객 메모</div>
+            <div style={{ fontSize: 13, color: '#444', whiteSpace: 'pre-wrap' }}>{b.memo}</div>
+          </div>}
           <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} expanded />
           {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus displayStatus={companionDisplayStatus(b, c)} expanded />)}
         </div>
