@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { adminApi } from './api'
-import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe } from './api'
+import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe, AdminUser } from './api'
 
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
@@ -46,11 +46,12 @@ export default function App() {
 }
 
 // ── 셸: 상단 네비 + 권한 게이트 ───────────────────────────────
-type View = 'reservations' | 'branches' | 'customers'
-const NAV: { key: View; label: string }[] = [
+type View = 'reservations' | 'branches' | 'customers' | 'admins'
+const NAV: { key: View; label: string; superOnly?: boolean }[] = [
   { key: 'reservations', label: '예약 관리' },
   { key: 'branches', label: '병원 관리' },
   { key: 'customers', label: '고객 관리' },
+  { key: 'admins', label: '관리자 관리', superOnly: true },   // 슈퍼 관리자만
 ]
 function AdminShell({ session }: { session: Session | null }) {
   const [view, setView] = useState<View>('reservations')
@@ -79,7 +80,7 @@ function AdminShell({ session }: { session: Session | null }) {
     <div style={{ display: 'flex', minHeight: '100dvh', fontFamily: 'system-ui, sans-serif' }}>
       <aside style={{ width: 180, flexShrink: 0, background: '#fff', borderRight: '1px solid #EEE', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 0, height: '100dvh', boxSizing: 'border-box' }}>
         <div style={{ fontSize: 16, fontWeight: 800, padding: '4px 10px 16px' }}>관리자</div>
-        {NAV.map(n => (
+        {NAV.filter(n => !n.superOnly || me?.role === 'super').map(n => (
           <button key={n.key} onClick={() => setView(n.key)} style={{
             textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600,
             background: view === n.key ? '#111' : 'transparent', color: view === n.key ? '#fff' : '#555',
@@ -95,6 +96,7 @@ function AdminShell({ session }: { session: Session | null }) {
           {view === 'reservations' && <ReservationsView isBranch={isBranch} />}
           {view === 'branches' && <BranchesView isBranch={isBranch} />}
           {view === 'customers' && <CustomersView />}
+          {view === 'admins' && me?.role === 'super' && <AdminsView myEmail={session?.user.email ?? undefined} />}
         </div>
       </main>
     </div>
@@ -1388,6 +1390,84 @@ function CustomersView() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── 관리자 관리 (슈퍼 전용) ───────────────────────────────────
+// 초대형: 이메일 + 담당 병원만 등록 → 그 Google 계정으로 로그인하면 자동 적용.
+function AdminsView({ myEmail }: { myEmail?: string }) {
+  const [list, setList] = useState<AdminUser[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [loading, setLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [branchId, setBranchId] = useState('')   // '' = 슈퍼 관리자(전체)
+  const [busy, setBusy] = useState(false)
+
+  const load = () => {
+    setLoading(true)
+    Promise.all([adminApi.listAdmins(), adminApi.getBranches()])
+      .then(([a, b]) => { setList(a); setBranches(b) })
+      .catch((e: any) => alert(e?.message)).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+  const branchLabel = (id: string | null) => id ? (branches.find(b => b.branchId === id)?.name || id) : '전체 (슈퍼 관리자)'
+
+  const add = async () => {
+    const e = email.trim()
+    if (!e) { alert('이메일을 입력하세요'); return }
+    setBusy(true)
+    try { await adminApi.saveAdmin(e, branchId || null); setEmail(''); setBranchId(''); load() }
+    catch (err: any) { alert(err?.message || '저장에 실패했습니다') } finally { setBusy(false) }
+  }
+  const remove = async (e: string) => {
+    if (!confirm(`${e} 관리자를 삭제하시겠습니까?`)) return
+    try { await adminApi.deleteAdmin(e); load() } catch (err: any) { alert(err?.message || '삭제에 실패했습니다') }
+  }
+
+  const inp: React.CSSProperties = { height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }
+  return (
+    <div>
+      <h2 style={{ fontSize: 16, margin: '16px 0 4px' }}>관리자 관리</h2>
+      <p style={{ fontSize: 12.5, color: '#888', margin: '0 0 16px', lineHeight: 1.6 }}>
+        이메일과 담당 병원을 등록하면, 그 사람이 <b>해당 Google 계정으로 로그인</b>할 때 자동으로 권한이 적용됩니다.
+        병원을 비워두면 <b>전체 권한(슈퍼 관리자)</b>입니다.
+      </p>
+
+      {/* 추가 폼 */}
+      <div style={{ ...cardStyle, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="manager@example.com" style={{ ...inp, flex: '1 1 220px', minWidth: 180 }} />
+        <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ ...inp, flex: '0 1 200px' }}>
+          <option value="">전체 (슈퍼 관리자)</option>
+          {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
+        </select>
+        <button disabled={busy} onClick={add} style={{ ...primaryBtn, padding: '10px 18px', opacity: busy ? 0.6 : 1 }}>{busy ? '저장 중…' : '+ 추가'}</button>
+      </div>
+
+      {loading ? <Center small>불러오는 중…</Center> : (
+        <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.6fr) minmax(120px,1fr) 80px', gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
+            {['이메일', '권한 / 담당 병원', ''].map((h, i) => <div key={i} style={{ ...headCell, textAlign: i === 2 ? 'right' : 'left' }}>{h}</div>)}
+          </div>
+          {list.map((a, i) => {
+            const isSuper = !a.branchId
+            const isMe = !!myEmail && a.email.toLowerCase() === myEmail.toLowerCase()
+            return (
+              <div key={a.email} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.6fr) minmax(120px,1fr) 80px', gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(i === list.length - 1 ? {} : { borderBottom: '1px solid #F3F3F3' }) }}>
+                <div style={{ ...cellBase, color: '#111' }}>{a.email} {isMe && <span style={{ color: '#aaa', fontSize: 11.5 }}>(나)</span>}</div>
+                <div style={{ ...cellBase }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, ...(isSuper ? { color: '#1D9E75', background: '#E7F5EE' } : { color: '#1E40AF', background: '#DBEAFE' }) }}>{isSuper ? '슈퍼 관리자' : branchLabel(a.branchId)}</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  {!isMe && <button onClick={() => remove(a.email)} style={{ border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', borderRadius: 7, padding: '5px 10px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>삭제</button>}
+                </div>
+              </div>
+            )
+          })}
+          {list.length === 0 && <p style={{ color: '#999', fontSize: 14, padding: '20px 16px' }}>등록된 관리자가 없습니다.</p>}
+        </div>
+      )}
+      <p style={{ fontSize: 11.5, color: '#aaa', marginTop: 10 }}>※ 이미 등록된 이메일을 다시 추가하면 담당 병원이 변경됩니다. 본인 계정은 삭제할 수 없습니다.</p>
     </div>
   )
 }

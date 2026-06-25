@@ -81,6 +81,7 @@ export type ManagerProposeInfo = {
 }
 
 export type AdminMe = { role: 'super' | 'branch'; branchId: string | null }
+export type AdminUser = { email: string; branchId: string | null; createdAt?: string }
 
 export const adminApi = {
   getMe: (): Promise<AdminMe> => adminGet('admin-me'),
@@ -107,6 +108,11 @@ export const adminApi = {
     adminGet('admin-customer-reservations', { lineUserId }),
   updateCustomerNameKo: (lineUserId: string, nameKo: string) =>
     adminPost('admin-customer-update', { lineUserId, nameKo }),
+
+  // 관리자 관리 (슈퍼 전용)
+  listAdmins: (): Promise<AdminUser[]> => adminGet('admin-admins'),
+  saveAdmin: (email: string, branchId: string | null) => adminPost('admin-admin-save', { email, branchId }),
+  deleteAdmin: (email: string) => adminPost('admin-admin-delete', { email }),
 
   // 매니저 예약 처리 (로그인 없음 · 알림 링크로 진입)
   getManagerProposeInfo: (reservationId: string): Promise<ManagerProposeInfo> =>
