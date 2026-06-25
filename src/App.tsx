@@ -19,8 +19,27 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> =
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
-// 시간 검색용 — 24시간제 30분 단위 (00:00 … 23:30)
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
+// 시간 검색용 — 시/분 따로 선택(24시간제), 분은 30분 단위(00/30)
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+const MIN_OPTIONS = ['00', '30']
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const h = value ? value.slice(0, 2) : ''
+  const m = value ? value.slice(3, 5) : ''
+  const sel: React.CSSProperties = { height: 38, boxSizing: 'border-box', padding: '0 6px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <select value={h} onChange={e => onChange(e.target.value === '' ? '' : `${e.target.value}:${m || '00'}`)} style={sel}>
+        <option value="">시</option>
+        {HOUR_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <span style={{ color: '#999', fontSize: 13 }}>:</span>
+      <select value={m} onChange={e => onChange(`${h || '00'}:${e.target.value || '00'}`)} style={sel}>
+        <option value="">분</option>
+        {MIN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </span>
+  )
+}
 
 // 개발용: true면 로그인 없이 바로 대시보드 (백엔드 ADMIN_AUTH_DISABLED와 함께 사용)
 const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
@@ -521,7 +540,6 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
     const c = va < vb ? -1 : va > vb ? 1 : 0
     return sortDir === 'asc' ? c : -c
   })
-  const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
 
   return (
     <div>
@@ -551,15 +569,9 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
             <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="예약 시간 범위">
               <span style={{ fontSize: 14 }}>🕐</span>
-              <select value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput}>
-                <option value="">시작</option>
-                {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <TimeSelect value={fromTime} onChange={setFromTime} />
               <span style={{ color: '#999' }}>~</span>
-              <select value={toTime} onChange={e => setToTime(e.target.value)} style={tInput}>
-                <option value="">종료</option>
-                {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <TimeSelect value={toTime} onChange={setToTime} />
               {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime('') }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
             </div>
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
