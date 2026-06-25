@@ -625,8 +625,6 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 // 예약 "표처럼 보이는 카드" 레이아웃 — 헤더와 카드가 같은 그리드 컬럼을 공유. 마지막은 액션 열.
 const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태', '접수일자', '']
 const RES_GRID = '130px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 96px 96px 200px'
-// 읽기 전용(고객 관리)용 — 마지막 액션 열 제외
-const RES_GRID_RO = '130px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 96px 96px'
 // 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
 const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center', 'center']
 // 컬럼별 정렬 키 (null = 정렬 불가)
@@ -712,15 +710,13 @@ function StatusBadge({ status }: { status: string }) {
   return <span style={{ padding: '3px 10px', borderRadius: 10, background: c.bg, color: c.fg, fontSize: 12, fontWeight: 700 }}>{STATUS_KO[status] ?? status}</span>
 }
 
-// 예약 한 건 = 카드 한 줄(예약자) + 동반자 줄. 행 클릭 → 상세 드로어. 우측 액션 열.
-// readOnly=고객 관리용: 액션 열 없이 동일 레이아웃으로 표시(행 클릭으로 상세 드로어만).
-function BookingRow({ b, last, busy = null, act, onPropose, onOpen, readOnly }: { b: Booking; last?: boolean; busy?: string | null; act?: (k: 'confirm' | 'reject', id: string) => void; onPropose?: () => void; onOpen?: () => void; readOnly?: boolean }) {
+// 예약 한 건 = 카드 한 줄(예약자) + 동반자 줄. 동반자가 있으면 한 그룹(연녹색)으로 묶어 표시. 행 클릭 → 상세 드로어.
+function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; last?: boolean; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; onPropose: () => void; onOpen: () => void }) {
   const compBatches = pendingCompanionBatches(b)
   const disabled = busy === b.booker.id
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
   const sbtn: React.CSSProperties = { padding: '5px 9px', borderRadius: 7, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn() }
-  const grid = readOnly ? RES_GRID_RO : RES_GRID
 
   const actionCol = () => {
     if (isReschedulePending(b) || isNewPending(b)) return (
@@ -744,10 +740,10 @@ function BookingRow({ b, last, busy = null, act, onPropose, onOpen, readOnly }: 
     return null
   }
 
-  const personRow = (p: Person, isComp: boolean, idx = 0) => (
-    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: grid, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#FBFBFB', borderTop: '1px solid #F2F2F2' } : {}) }}>
+  const personRow = (p: Person, isComp: boolean) => (
+    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#ECF7F1', borderTop: '1px dashed #CDE9DC' } : {}) }}>
       {cell(isComp
-        ? <span style={{ color: '#888', fontWeight: 700, fontSize: 12 }}>동반자 {idx + 1}</span>
+        ? ''
         : <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
             <b>{dot(b.date)} {b.time}</b>
             {isReschedulePending(b) && <span style={{ fontSize: 10.5, color: '#1E40AF', fontWeight: 700 }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</span>}
@@ -756,8 +752,9 @@ function BookingRow({ b, last, busy = null, act, onPropose, onOpen, readOnly }: 
       {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center' })}
       {cell(
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
-          <b style={{ color: isComp ? '#222' : '#111' }}>{p.nameKo || p.name}</b>
+          <b style={{ color: isComp ? '#222' : '#111' }}>{isComp && <span style={{ color: '#7bbf9f', marginRight: 4 }}>↳</span>}{p.nameKo || p.name}</b>
           {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 11.5 }}>{p.name}</span>}
+          {!isComp && b.companions.length > 0 && <span style={{ alignSelf: 'center', marginTop: 3, background: '#1D9E75', color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>동반 {b.companions.length}명</span>}
         </div>, { textAlign: 'center', whiteSpace: 'normal' })}
       {cell(p.birthDate || '-', { color: '#555', textAlign: 'center' })}
       {cell(genderKo(p.gender), { color: '#555', textAlign: 'center' })}
@@ -765,14 +762,16 @@ function BookingRow({ b, last, busy = null, act, onPropose, onOpen, readOnly }: 
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
       {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
-      {!readOnly && cell(isComp ? '' : actionCol(), { overflow: 'visible' })}
+      {cell(isComp ? '' : actionCol(), { overflow: 'visible' })}
     </div>
   )
 
+  // 동반자(함께 예약된 고객)가 있으면 예약자+동반자를 연녹색 배경 + 왼쪽 초록 띠로 한 그룹으로 묶는다
+  const grouped = b.companions.length > 0
   return (
-    <div onClick={onOpen} style={{ background: '#fff', cursor: 'pointer', ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
+    <div onClick={onOpen} style={{ cursor: 'pointer', background: grouped ? '#F4FAF7' : '#fff', borderLeft: `3px solid ${grouped ? '#1D9E75' : 'transparent'}`, ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
       {personRow(b.booker, false)}
-      {b.companions.map((c, i) => personRow(c, true, i))}
+      {b.companions.map((c) => personRow(c, true))}
     </div>
   )
 }
@@ -1255,19 +1254,54 @@ function BranchForm({ init, isNew, canDelete, onClose, onSaved }: { init: AdminB
 }
 
 // ── 고객 관리 ─────────────────────────────────────────────────
-// 고객 목록 표 컬럼
-const CUST_HEADERS = ['이름', '생년월일', '성별', 'LINE 프로필', '등록일']
-const CUST_GRID = 'minmax(140px,1.6fr) 116px 64px minmax(120px,1.2fr) 110px'
-const CUST_ALIGN: Array<React.CSSProperties['textAlign']> = ['left', 'center', 'center', 'left', 'center']
-
-// 예약 표 — 읽기 전용(고객 관리). 예약관리와 동일 레이아웃(액션 열만 제외), 행 클릭 → 상세 드로어.
-function ReservationTableRO({ bookings, onOpen }: { bookings: Booking[]; onOpen: (b: Booking) => void }) {
+// 고객 목록 표: 예약(건수) · LINE 프로필 · 이름 · 로마자 · 생년월일 · 성별 · 등록일
+const CUST_GRID = '64px minmax(96px,1.1fr) minmax(110px,1.2fr) minmax(92px,1fr) 104px 56px 100px'
+const CUST_LIST_HEADERS: { label: string; align: React.CSSProperties['textAlign'] }[] = [
+  { label: '예약', align: 'center' }, { label: 'LINE 프로필', align: 'left' }, { label: '이름', align: 'left' },
+  { label: '로마자', align: 'left' }, { label: '생년월일', align: 'left' }, { label: '성별', align: 'left' }, { label: '등록일', align: 'left' },
+]
+// 고객 상세의 예약 내역 — 예약관리와 동일 레이아웃의 읽기 전용 표(동반자 그룹 박스)
+const CUST_RES_GRID = '116px minmax(96px,1.3fr) 104px 52px 60px minmax(110px,1.4fr) 96px'
+function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
+  const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
+  const personRow = (b: Booking, p: Person, isComp: boolean) => (
+    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: CUST_RES_GRID, gap: '0 12px', alignItems: 'center', padding: '11px 14px', ...(isComp ? { background: '#ECF7F1', borderTop: '1px dashed #CDE9DC' } : {}) }}>
+      {cell(isComp ? '' : (
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
+          <b>{dot(b.date)} {b.time}</b>
+          {isReschedulePending(b) && <span style={{ fontSize: 10, color: '#1E40AF', fontWeight: 700 }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</span>}
+          {isClinicProposed(b) && <span style={{ fontSize: 10, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
+        </div>
+      ), { textAlign: 'center', whiteSpace: 'normal' })}
+      {cell(
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+          <b style={{ color: isComp ? '#222' : '#111' }}>{isComp && <span style={{ color: '#7bbf9f', marginRight: 4 }}>↳</span>}{p.nameKo || p.name}</b>
+          {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 11.5 }}>{p.name}</span>}
+          {!isComp && b.companions.length > 0 && <span style={{ alignSelf: 'center', marginTop: 3, background: '#1D9E75', color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>동반 {b.companions.length}명</span>}
+        </div>, { textAlign: 'center', whiteSpace: 'normal' })}
+      {cell(p.birthDate || '-', { color: '#555', textAlign: 'center' })}
+      {cell(genderKo(p.gender), { color: '#555', textAlign: 'center' })}
+      {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
+      {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
+      {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
+    </div>
+  )
   return (
     <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: RES_GRID_RO, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
-        {RES_HEADERS.slice(0, 9).map((h, i) => <div key={i} style={{ ...headCell, textAlign: RES_ALIGN[i] }}>{h}</div>)}
+      <div style={{ display: 'grid', gridTemplateColumns: CUST_RES_GRID, gap: '0 12px', padding: '10px 14px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
+        {['예약 일시', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태'].map((h, i) => (
+          <div key={i} style={{ fontSize: 11.5, fontWeight: 700, color: '#888', textAlign: i === 5 ? 'left' : 'center', whiteSpace: 'nowrap' }}>{h}</div>
+        ))}
       </div>
-      <div>{bookings.map((b, i) => <BookingRow key={b.groupId} b={b} readOnly last={i === bookings.length - 1} onOpen={() => onOpen(b)} />)}</div>
+      {bookings.map((b, i) => {
+        const grouped = b.companions.length > 0
+        return (
+          <div key={b.groupId} style={{ background: grouped ? '#F4FAF7' : '#fff', borderLeft: `3px solid ${grouped ? '#1D9E75' : 'transparent'}`, ...(i === bookings.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
+            {personRow(b, b.booker, false)}
+            {b.companions.map(c => personRow(b, c, true))}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1280,7 +1314,6 @@ function CustomersView() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
-  const [drawerTarget, setDrawerTarget] = useState<Booking | null>(null)
 
   useEffect(() => { adminApi.getCustomers().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }, [])
   const open = async (c: Customer) => {
@@ -1323,8 +1356,10 @@ function CustomersView() {
       <div style={{ fontSize: 12.5, color: '#888', marginBottom: 14 }}>{sel.birthDate || '-'} · {genderKo(sel.gender)} · 등록 {dot((sel.createdAt || '').slice(0, 10))}</div>
       {resv === null ? <Center small>불러오는 중…</Center>
         : resv.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>예약 내역이 없습니다.</p>
-          : <ReservationTableRO bookings={resv} onOpen={setDrawerTarget} />}
-      {drawerTarget && <ReservationDrawer booking={drawerTarget} readOnly onClose={() => setDrawerTarget(null)} />}
+          : <>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#999', marginBottom: 8 }}>예약 내역</div>
+              <ReadonlyBookingTable bookings={resv} />
+            </>}
     </div>
   )
 
@@ -1335,21 +1370,19 @@ function CustomersView() {
       {list.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p> : (
         <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
-            {CUST_HEADERS.map((h, i) => <div key={i} style={{ ...headCell, textAlign: CUST_ALIGN[i] }}>{h}</div>)}
+            {CUST_LIST_HEADERS.map((h, i) => <div key={i} style={{ ...headCell, textAlign: h.align }}>{h.label}</div>)}
           </div>
           <div>
             {list.map((c, i) => (
-              <div key={c.lineUserId} onClick={() => open(c)} style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', ...(i === list.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
-                <div style={{ ...cellBase, whiteSpace: 'normal' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
-                    <b style={{ color: '#111' }}>{c.nameKo || c.name || '(이름없음)'}</b>
-                    {c.name && <span style={{ color: '#aaa', fontSize: 11.5 }}>{c.name}</span>}
-                  </div>
-                </div>
-                <div style={{ ...cellBase, color: '#555', textAlign: 'center' }}>{c.birthDate || '-'}</div>
-                <div style={{ ...cellBase, color: '#555', textAlign: 'center' }}>{genderKo(c.gender)}</div>
-                <div style={{ ...cellBase, color: '#555' }}>{c.displayName || '-'}</div>
-                <div style={{ ...cellBase, color: '#888', textAlign: 'center' }}>{dot((c.createdAt || '').slice(0, 10))}</div>
+              <div key={c.lineUserId} onClick={() => open(c)} style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', alignItems: 'center', minHeight: 48, padding: '8px 16px', cursor: 'pointer', ...(i === list.length - 1 ? {} : { borderBottom: '1px solid #F3F3F3' }) }}>
+                {/* 예약 건수 — getCustomers가 reservationCount를 함께 내려주면 표시됩니다 */}
+                <div style={{ textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 22, fontSize: 12.5, fontWeight: 700, color: '#1D9E75', background: '#E7F5EE', borderRadius: 999, padding: '2px 8px' }}>{(c as any).reservationCount ?? 0}</span></div>
+                <div style={{ ...cellBase, color: '#333' }}>{c.displayName || '-'}</div>
+                <div style={{ ...cellBase, color: '#111', fontWeight: 700 }}>{c.nameKo || c.name || '(이름없음)'}</div>
+                <div style={{ ...cellBase, color: '#a3a8a3' }}>{c.name || '-'}</div>
+                <div style={{ ...cellBase, color: '#555' }}>{c.birthDate || '-'}</div>
+                <div style={{ ...cellBase, color: '#555' }}>{genderKo(c.gender)}</div>
+                <div style={{ ...cellBase, color: '#555' }}>{dot((c.createdAt || '').slice(0, 10))}</div>
               </div>
             ))}
           </div>
