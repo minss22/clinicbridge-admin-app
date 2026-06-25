@@ -625,6 +625,8 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 // 예약 "표처럼 보이는 카드" 레이아웃 — 헤더와 카드가 같은 그리드 컬럼을 공유. 마지막은 액션 열.
 const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태', '접수일자', '']
 const RES_GRID = '130px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 96px 96px 200px'
+// 읽기 전용(고객 관리)용 — 마지막 액션 열 제외
+const RES_GRID_RO = '130px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 96px 96px'
 // 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
 const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center', 'center']
 // 컬럼별 정렬 키 (null = 정렬 불가)
@@ -711,37 +713,39 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // 예약 한 건 = 카드 한 줄(예약자) + 동반자 줄. 행 클릭 → 상세 드로어. 우측 액션 열.
-function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; last?: boolean; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; onPropose: () => void; onOpen: () => void }) {
+// readOnly=고객 관리용: 액션 열 없이 동일 레이아웃으로 표시(행 클릭으로 상세 드로어만).
+function BookingRow({ b, last, busy = null, act, onPropose, onOpen, readOnly }: { b: Booking; last?: boolean; busy?: string | null; act?: (k: 'confirm' | 'reject', id: string) => void; onPropose?: () => void; onOpen?: () => void; readOnly?: boolean }) {
   const compBatches = pendingCompanionBatches(b)
   const disabled = busy === b.booker.id
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
   const sbtn: React.CSSProperties = { padding: '5px 9px', borderRadius: 7, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn() }
+  const grid = readOnly ? RES_GRID_RO : RES_GRID
 
   const actionCol = () => {
     if (isReschedulePending(b) || isNewPending(b)) return (
       <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button disabled={disabled} onClick={stop(() => act('confirm', b.booker.id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>확정</button>
-        <button disabled={disabled} onClick={stop(() => act('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
-        <button onClick={stop(onPropose)} style={{ ...sbtn, border: '1px dashed #F6A623', background: '#fff', color: '#B45309', cursor: 'pointer' }}>시간조정</button>
+        <button disabled={disabled} onClick={stop(() => act?.('confirm', b.booker.id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>확정</button>
+        <button disabled={disabled} onClick={stop(() => act?.('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
+        <button onClick={stop(() => onPropose?.())} style={{ ...sbtn, border: '1px dashed #F6A623', background: '#fff', color: '#B45309', cursor: 'pointer' }}>시간조정</button>
       </div>
     )
     if (isClinicProposed(b)) return (
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button disabled={disabled} onClick={stop(() => act('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>제안 취소</button>
+        <button disabled={disabled} onClick={stop(() => act?.('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>제안 취소</button>
       </div>
     )
     if (b.booker.status === 'confirmed' && compBatches.length) return (
       <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act('confirm', compBatches[0][0].id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>동반 확정</button>
-        <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act('reject', compBatches[0][0].id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
+        <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act?.('confirm', compBatches[0][0].id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>동반 확정</button>
+        <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act?.('reject', compBatches[0][0].id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
       </div>
     )
     return null
   }
 
   const personRow = (p: Person, isComp: boolean, idx = 0) => (
-    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#FBFBFB', borderTop: '1px solid #F2F2F2' } : {}) }}>
+    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: grid, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#FBFBFB', borderTop: '1px solid #F2F2F2' } : {}) }}>
       {cell(isComp
         ? <span style={{ color: '#888', fontWeight: 700, fontSize: 12 }}>동반자 {idx + 1}</span>
         : <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
@@ -761,7 +765,7 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
       {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
-      {cell(isComp ? '' : actionCol(), { overflow: 'visible' })}
+      {!readOnly && cell(isComp ? '' : actionCol(), { overflow: 'visible' })}
     </div>
   )
 
@@ -811,13 +815,13 @@ function ProposeModal({ booking, onClose, onDone }: { booking: Booking; onClose:
   )
 }
 
-// 예약 상세 — 우측 드로어
-function ReservationDrawer({ booking, busy, act, onPropose, onClose }: { booking: Booking; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; onPropose: () => void; onClose: () => void }) {
+// 예약 상세 — 우측 드로어. readOnly=고객 관리용: 처리 버튼(footer) 숨김.
+function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, readOnly }: { booking: Booking; busy?: string | null; act?: (k: 'confirm' | 'reject', id: string) => void; onPropose?: () => void; onClose: () => void; readOnly?: boolean }) {
   const b = booking
   const compBatches = pendingCompanionBatches(b)
   const disabled = busy === b.booker.id
-  const canAct = isReschedulePending(b) || isNewPending(b)
-  const hasCompPending = b.booker.status === 'confirmed' && compBatches.length > 0
+  const canAct = !readOnly && (isReschedulePending(b) || isNewPending(b))
+  const hasCompPending = !readOnly && b.booker.status === 'confirmed' && compBatches.length > 0
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', justifyContent: 'flex-end', zIndex: 55, fontFamily: 'system-ui, sans-serif' }}>
       <aside onClick={e => e.stopPropagation()} style={{ width: 'min(460px, 92vw)', height: '100dvh', background: '#fff', boxShadow: '-4px 0 20px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
@@ -837,23 +841,23 @@ function ReservationDrawer({ booking, busy, act, onPropose, onClose }: { booking
           <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} expanded />
           {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus displayStatus={companionDisplayStatus(b, c)} expanded />)}
         </div>
-        {(canAct || isClinicProposed(b) || hasCompPending) && (
+        {!readOnly && (canAct || isClinicProposed(b) || hasCompPending) && (
           <div style={{ borderTop: '1px solid #EEE', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {canAct && (
               <div style={{ display: 'flex', gap: 8 }}>
-                <button disabled={disabled} onClick={() => act('confirm', b.booker.id)} style={{ ...confirmBtn, flex: 1, padding: '11px' }}>확정</button>
-                <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={{ ...rejectBtn, flex: 1, padding: '11px' }}>거절</button>
-                <button onClick={onPropose} style={{ ...proposeBtn, flex: 1, padding: '11px' }}>🕒 다른 시간 제안</button>
+                <button disabled={disabled} onClick={() => act?.('confirm', b.booker.id)} style={{ ...confirmBtn, flex: 1, padding: '11px' }}>확정</button>
+                <button disabled={disabled} onClick={() => act?.('reject', b.booker.id)} style={{ ...rejectBtn, flex: 1, padding: '11px' }}>거절</button>
+                <button onClick={() => onPropose?.()} style={{ ...proposeBtn, flex: 1, padding: '11px' }}>🕒 다른 시간 제안</button>
               </div>
             )}
             {isClinicProposed(b) && (
-              <button disabled={disabled} onClick={() => act('reject', b.booker.id)} style={{ ...rejectBtn, padding: '11px' }}>제안 취소(거절)</button>
+              <button disabled={disabled} onClick={() => act?.('reject', b.booker.id)} style={{ ...rejectBtn, padding: '11px' }}>제안 취소(거절)</button>
             )}
             {hasCompPending && compBatches.map((batch, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ flex: 1, fontSize: 12.5, color: '#065F46', fontWeight: 700 }}>➕ {batch.map(c => c.nameKo || c.name).join(', ')}</span>
-                <button disabled={busy === batch[0].id} onClick={() => act('confirm', batch[0].id)} style={confirmBtn}>확정</button>
-                <button disabled={busy === batch[0].id} onClick={() => act('reject', batch[0].id)} style={rejectBtn}>거절</button>
+                <button disabled={busy === batch[0].id} onClick={() => act?.('confirm', batch[0].id)} style={confirmBtn}>확정</button>
+                <button disabled={busy === batch[0].id} onClick={() => act?.('reject', batch[0].id)} style={rejectBtn}>거절</button>
               </div>
             ))}
           </div>
@@ -1250,6 +1254,23 @@ function BranchForm({ init, isNew, canDelete, onClose, onSaved }: { init: AdminB
 }
 
 // ── 고객 관리 ─────────────────────────────────────────────────
+// 고객 목록 표 컬럼
+const CUST_HEADERS = ['이름', '생년월일', '성별', 'LINE 프로필', '등록일']
+const CUST_GRID = 'minmax(140px,1.6fr) 116px 64px minmax(120px,1.2fr) 110px'
+const CUST_ALIGN: Array<React.CSSProperties['textAlign']> = ['left', 'center', 'center', 'left', 'center']
+
+// 예약 표 — 읽기 전용(고객 관리). 예약관리와 동일 레이아웃(액션 열만 제외), 행 클릭 → 상세 드로어.
+function ReservationTableRO({ bookings, onOpen }: { bookings: Booking[]; onOpen: (b: Booking) => void }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: RES_GRID_RO, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
+        {RES_HEADERS.slice(0, 9).map((h, i) => <div key={i} style={{ ...headCell, textAlign: RES_ALIGN[i] }}>{h}</div>)}
+      </div>
+      <div>{bookings.map((b, i) => <BookingRow key={b.groupId} b={b} readOnly last={i === bookings.length - 1} onOpen={() => onOpen(b)} />)}</div>
+    </div>
+  )
+}
+
 function CustomersView() {
   const [list, setList] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -1258,6 +1279,7 @@ function CustomersView() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [drawerTarget, setDrawerTarget] = useState<Booking | null>(null)
 
   useEffect(() => { adminApi.getCustomers().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }, [])
   const open = async (c: Customer) => {
@@ -1272,7 +1294,7 @@ function CustomersView() {
       const v = draft.trim()
       setSel({ ...sel, nameKo: v })
       setList(prev => prev.map(c => c.lineUserId === sel.lineUserId ? { ...c, nameKo: v } : c))
-      try { setResv(await adminApi.getCustomerReservations(sel.lineUserId)) } catch { /* 예약 카드 갱신 실패는 무시 */ }
+      try { setResv(await adminApi.getCustomerReservations(sel.lineUserId)) } catch { /* 예약 표 갱신 실패는 무시 */ }
       setEditing(false)
     } catch (e: any) { alert(e?.message || '수정에 실패했습니다') }
     finally { setSaving(false) }
@@ -1300,7 +1322,8 @@ function CustomersView() {
       <div style={{ fontSize: 12.5, color: '#888', marginBottom: 14 }}>{sel.birthDate || '-'} · {genderKo(sel.gender)} · 등록 {dot((sel.createdAt || '').slice(0, 10))}</div>
       {resv === null ? <Center small>불러오는 중…</Center>
         : resv.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>예약 내역이 없습니다.</p>
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{resv.map(b => <ReadonlyBooking key={b.groupId} b={b} />)}</div>}
+          : <ReservationTableRO bookings={resv} onOpen={setDrawerTarget} />}
+      {drawerTarget && <ReservationDrawer booking={drawerTarget} readOnly onClose={() => setDrawerTarget(null)} />}
     </div>
   )
 
@@ -1308,25 +1331,29 @@ function CustomersView() {
   return (
     <div>
       <h2 style={{ fontSize: 16, margin: '16px 0' }}>고객 ({list.length}) · 등록순</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {list.map(c => (
-          <button key={c.lineUserId} onClick={() => open(c)} style={listRow}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{c.nameKo || c.name || '(이름없음)'} <span style={{ color: '#aaa', fontSize: 12, fontWeight: 400 }}>{c.name}</span></div>
-            <div style={{ fontSize: 12.5, color: '#888', marginTop: 3 }}>{c.birthDate || '-'} · {genderKo(c.gender)} · 등록 {dot((c.createdAt || '').slice(0, 10))}</div>
-          </button>
-        ))}
-        {list.length === 0 && <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p>}
-      </div>
-    </div>
-  )
-}
-
-function ReadonlyBooking({ b }: { b: Booking }) {
-  return (
-    <div style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 14, padding: 16 }}>
-      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#444', marginBottom: 4 }}>{b.branchName} · {dot(b.date)} {b.time}</div>
-      <PersonDetail label="예약자" p={b.booker} showStatus displayStatus={bookerDisplayStatus(b)} />
-      {b.companions.map((c, i) => <PersonDetail key={c.id} label={`동반자 ${i + 1}`} p={c} showStatus displayStatus={companionDisplayStatus(b, c)} />)}
+      {list.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p> : (
+        <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
+            {CUST_HEADERS.map((h, i) => <div key={i} style={{ ...headCell, textAlign: CUST_ALIGN[i] }}>{h}</div>)}
+          </div>
+          <div>
+            {list.map((c, i) => (
+              <div key={c.lineUserId} onClick={() => open(c)} style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', ...(i === list.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
+                <div style={{ ...cellBase, whiteSpace: 'normal' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+                    <b style={{ color: '#111' }}>{c.nameKo || c.name || '(이름없음)'}</b>
+                    {c.name && <span style={{ color: '#aaa', fontSize: 11.5 }}>{c.name}</span>}
+                  </div>
+                </div>
+                <div style={{ ...cellBase, color: '#555', textAlign: 'center' }}>{c.birthDate || '-'}</div>
+                <div style={{ ...cellBase, color: '#555', textAlign: 'center' }}>{genderKo(c.gender)}</div>
+                <div style={{ ...cellBase, color: '#555' }}>{c.displayName || '-'}</div>
+                <div style={{ ...cellBase, color: '#888', textAlign: 'center' }}>{dot((c.createdAt || '').slice(0, 10))}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
