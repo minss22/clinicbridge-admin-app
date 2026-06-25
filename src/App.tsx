@@ -584,7 +584,7 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
             <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
           ) : (
             <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 920 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1100 }}>
                 <colgroup>{RES_COLW.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>
                 <thead>
                   <tr style={{ background: '#FAFBFC' }}>
@@ -628,10 +628,10 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 // 예약 표(<table>) — 공유 컬럼(예약일시·병원·상태·접수일·버튼)은 rowSpan 세로 병합,
 // 사람별 컬럼(이름·생년월일·성별·구분·희망시술)만 동반자 수만큼 행으로 나뉜다.
 const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태', '접수일자', '']
-// col 너비 ('' = 자동: 이름·희망시술이 남는 폭을 나눠 가짐)
-const RES_COLW = ['140px', '92px', '', '104px', '52px', '64px', '', '104px', '96px', '188px']
-// 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
-const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center', 'center']
+// col 너비 ('' = 자동: 희망시술이 남는 폭을 가짐). 예약자는 고정폭으로 되돌림.
+const RES_COLW = ['128px', '88px', '164px', '100px', '52px', '60px', '', '92px', '96px', '196px']
+// 전체 좌측 정렬
+const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['left', 'left', 'left', 'left', 'left', 'left', 'left', 'left', 'left', 'left']
 // 컬럼별 정렬 키 (null = 정렬 불가)
 const RES_SORT: Array<string | null> = ['reserved', 'branch', 'name', 'birth', 'gender', 'visit', 'treatment', 'status', 'created', null]
 const sortValue = (b: Booking, key: string): string => {
@@ -726,19 +726,19 @@ function BookingRow({ b, busy, act, onPropose, onOpen }: { b: Booking; busy: str
 
   const actionCol = () => {
     if (isReschedulePending(b) || isNewPending(b)) return (
-      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
         <button disabled={disabled} onClick={stop(() => act('confirm', b.booker.id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>확정</button>
         <button disabled={disabled} onClick={stop(() => act('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
         <button onClick={stop(onPropose)} style={{ ...sbtn, border: '1px dashed #F6A623', background: '#fff', color: '#B45309', cursor: 'pointer' }}>시간조정</button>
       </div>
     )
     if (isClinicProposed(b)) return (
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
         <button disabled={disabled} onClick={stop(() => act('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>제안 취소</button>
       </div>
     )
     if (b.booker.status === 'confirmed' && compBatches.length) return (
-      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
         <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act('confirm', compBatches[0][0].id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>동반 확정</button>
         <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act('reject', compBatches[0][0].id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
       </div>
@@ -746,28 +746,26 @@ function BookingRow({ b, busy, act, onPropose, onOpen }: { b: Booking; busy: str
     return null
   }
 
-  const td: React.CSSProperties = { fontSize: 13, color: '#333', padding: '11px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }
-  // 공유(병합) 셀 — 예약자 행에서 rowSpan, 좌우 옅은 구분선으로 병합 영역 강조
+  const td: React.CSSProperties = { fontSize: 13, color: '#333', padding: '12px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'top', textAlign: 'left' }
+  // 공유(병합) 셀 — 예약자 행에서 rowSpan. 상단 정렬로 예약자 행과 맞춤.
   const shared = (content: React.ReactNode, extra?: React.CSSProperties): React.ReactNode => (
-    <td rowSpan={span} style={{ ...td, textAlign: 'center', borderBottom: '1px solid #EAEAEA', background: '#fff', ...extra }}>{content}</td>
+    <td rowSpan={span} style={{ ...td, borderBottom: '1px solid #EAEAEA', background: '#fff', ...extra }}>{content}</td>
   )
   // 사람별 셀들 (이름·생년월일·성별·구분·희망시술) — 동반자 행은 옅은 배경 + 위 구분선
   const personCells = (p: Person, isComp: boolean, lastPerson: boolean) => {
-    const pc: React.CSSProperties = { ...td, background: isComp ? '#FCFCFD' : '#fff', borderBottom: lastPerson ? '1px solid #EAEAEA' : '1px solid #F4F4F4' }
+    const pc: React.CSSProperties = { ...td, verticalAlign: 'middle', background: isComp ? '#FCFCFD' : '#fff', borderBottom: lastPerson ? '1px solid #EAEAEA' : '1px solid #F4F4F4' }
     return (
       <>
-        <td style={{ ...pc, textAlign: 'center', whiteSpace: 'normal' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.3 }}>
-            <span>
-              {isComp && <span style={{ fontSize: 10, color: '#999', background: '#EFEFEF', borderRadius: 5, padding: '1px 5px', marginRight: 5 }}>동반</span>}
-              <b style={{ color: isComp ? '#444' : '#111' }}>{p.nameKo || p.name}</b>
-            </span>
-            {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 11.5 }}>{p.name}</span>}
-          </div>
+        <td style={{ ...pc, whiteSpace: 'normal' }}>
+          <span style={{ lineHeight: 1.4 }}>
+            <b style={{ color: isComp ? '#444' : '#111' }}>{p.nameKo || p.name}</b>
+            {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 11.5, marginLeft: 5 }}>{p.name}</span>}
+            {!isComp && span > 1 && <span style={{ fontSize: 10, color: '#1D9E75', background: '#E8F5EF', borderRadius: 5, padding: '1px 5px', marginLeft: 5, fontWeight: 700 }}>대표</span>}
+          </span>
         </td>
-        <td style={{ ...pc, textAlign: 'center', color: '#555' }}>{p.birthDate || '-'}</td>
-        <td style={{ ...pc, textAlign: 'center', color: '#555' }}>{genderKo(p.gender)}</td>
-        <td style={{ ...pc, textAlign: 'center', overflow: 'visible' }}><VisitPill v={p.visitType} /></td>
+        <td style={{ ...pc, color: '#555' }}>{p.birthDate || '-'}</td>
+        <td style={{ ...pc, color: '#555' }}>{genderKo(p.gender)}</td>
+        <td style={{ ...pc, overflow: 'visible' }}><VisitPill v={p.visitType} /></td>
         <td style={{ ...pc, whiteSpace: 'normal' }}>{p.treatmentRequest || '-'}</td>
       </>
     )
@@ -780,6 +778,7 @@ function BookingRow({ b, busy, act, onPropose, onOpen }: { b: Booking; busy: str
           {i === 0 && shared(
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
               <b>{dot(b.date)} {b.time}</b>
+              {span > 1 && <span style={{ fontSize: 11, color: '#999', marginTop: 1 }}>함께 예약 · {span}명</span>}
               {isReschedulePending(b) && <span style={{ fontSize: 10.5, color: '#1E40AF', fontWeight: 700 }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</span>}
               {isClinicProposed(b) && <span style={{ fontSize: 10.5, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
             </div>, { whiteSpace: 'normal' })}
