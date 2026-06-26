@@ -614,8 +614,9 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
       )}
 
       {proposeTarget && <ProposeModal booking={proposeTarget} onClose={() => setProposeTarget(null)} onDone={() => { setProposeTarget(null); load(true) }} />}
-      {drawerTarget && <ReservationDrawer booking={drawerTarget} busy={busy} act={act} onPropose={() => setProposeTarget(drawerTarget)} onClose={() => setDrawerTarget(null)} />}
-      {dayDrawer && <DayDrawer date={dayDrawer.date} bookings={dayDrawer.bookings} onClose={() => setDayDrawer(null)} onOpenBooking={(b) => { setDayDrawer(null); setDrawerTarget(b) }} />}
+      {/* 데이 드로어(타임라인)를 닫지 않고 그 위에 상세 드로어를 띄움 → 상세 닫으면 타임라인으로 복귀 */}
+      {dayDrawer && <DayDrawer date={dayDrawer.date} bookings={dayDrawer.bookings} onClose={() => setDayDrawer(null)} onOpenBooking={(b) => setDrawerTarget(b)} />}
+      {drawerTarget && <ReservationDrawer booking={drawerTarget} busy={busy} act={act} onPropose={() => setProposeTarget(drawerTarget)} onClose={() => setDrawerTarget(null)} backLabel={dayDrawer ? '← 타임라인' : undefined} />}
 
       {rejectTarget && (
         <div onClick={() => { if (!busy) setRejectTarget(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
@@ -833,7 +834,7 @@ function ProposeModal({ booking, onClose, onDone }: { booking: Booking; onClose:
 }
 
 // 예약 상세 — 우측 드로어. readOnly=고객 관리용: 처리 버튼(footer) 숨김.
-function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, readOnly }: { booking: Booking; busy?: string | null; act?: (k: 'confirm' | 'reject', id: string) => void; onPropose?: () => void; onClose: () => void; readOnly?: boolean }) {
+function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, readOnly, backLabel }: { booking: Booking; busy?: string | null; act?: (k: 'confirm' | 'reject', id: string) => void; onPropose?: () => void; onClose: () => void; readOnly?: boolean; backLabel?: string }) {
   const b = booking
   const compBatches = pendingCompanionBatches(b)
   const disabled = busy === b.booker.id
@@ -842,6 +843,9 @@ function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, read
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', justifyContent: 'flex-end', zIndex: 55, fontFamily: 'system-ui, sans-serif' }}>
       <aside onClick={e => e.stopPropagation()} style={{ width: 'min(460px, 92vw)', height: '100dvh', background: '#fff', boxShadow: '-4px 0 20px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+        {backLabel && (
+          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 16px', border: 'none', borderBottom: '1px solid #F2F2F2', background: '#FAFBFC', color: '#1D9E75', fontSize: 13, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>{backLabel}</button>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid #EEE' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{b.branchName}</div>
