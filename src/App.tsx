@@ -946,9 +946,14 @@ function CalendarView({ bookings, onOpenDay }: { bookings: Booking[]; onOpenDay:
   )
 }
 
-// 날짜별 예약 타임라인 — 우측 드로어
+// 날짜별 예약 타임라인 — 우측 드로어. 같은 시간은 한 번만(점), 점끼리 선으로 잇고 그 시간 예약을 오른쪽에.
 function DayDrawer({ date, bookings, onClose, onOpenBooking }: { date: string; bookings: Booking[]; onClose: () => void; onOpenBooking: (b: Booking) => void }) {
   const sorted = [...bookings].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
+  // 같은 시간끼리 묶기
+  const byTime: Record<string, Booking[]> = {}
+  for (const b of sorted) (byTime[b.time] ??= []).push(b)
+  const times = Object.keys(byTime).sort()
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', justifyContent: 'flex-end', zIndex: 55, fontFamily: 'system-ui, sans-serif' }}>
       <aside onClick={e => e.stopPropagation()} style={{ width: 'min(420px, 92vw)', height: '100dvh', background: '#fff', boxShadow: '-4px 0 20px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
@@ -956,22 +961,40 @@ function DayDrawer({ date, bookings, onClose, onOpenBooking }: { date: string; b
           <b style={{ fontSize: 16 }}>{dot(date)} 예약 ({sorted.length})</b>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#888', cursor: 'pointer' }}>×</button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
-          {sorted.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>예약이 없습니다.</p> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {sorted.map(b => {
-                const s = bookerDisplayStatus(b)
-                const c = STATUS_COLOR[s] ?? STATUS_COLOR.pending
+        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 18px' }}>
+          {times.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>예약이 없습니다.</p> : (
+            <div>
+              {times.map((t, ti) => {
+                const last = ti === times.length - 1
                 return (
-                  <button key={b.groupId} type="button" onClick={() => onOpenBooking(b)} style={{ display: 'flex', gap: 10, alignItems: 'stretch', padding: '10px 0', border: 'none', borderBottom: '1px solid #F2F2F2', background: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ width: 52, flexShrink: 0, fontSize: 13, fontWeight: 700, color: '#333' }}>{b.time}</div>
-                    <div style={{ width: 4, borderRadius: 2, background: c.fg, flexShrink: 0 }} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.booker.nameKo || b.booker.name}</div>
-                      <div style={{ fontSize: 12.5, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.booker.treatmentRequest || '-'}</div>
+                  <div key={t} style={{ display: 'flex', gap: 12 }}>
+                    {/* 왼쪽: 점 + 시간, 점끼리 세로선 연결 */}
+                    <div style={{ width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 18 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 999, background: '#1D9E75', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>{t}</span>
+                      </div>
+                      {!last && <div style={{ flex: 1, width: 2, background: '#D7EBE2', marginLeft: 4, minHeight: 10 }} />}
                     </div>
-                    <span style={{ alignSelf: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg, borderRadius: 6, padding: '2px 7px' }}>{STATUS_SHORT[s] ?? s}</span>
-                  </button>
+                    {/* 오른쪽: 그 시간의 예약들 */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: last ? 0 : 18 }}>
+                      {byTime[t].map(b => {
+                        const s = bookerDisplayStatus(b)
+                        const c = STATUS_COLOR[s] ?? STATUS_COLOR.pending
+                        return (
+                          <button key={b.groupId} type="button" onClick={() => onOpenBooking(b)} style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%', padding: '9px 11px', border: '1px solid #EEE', borderLeft: `3px solid ${c.fg}`, borderRadius: 10, background: '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {b.booker.nameKo || b.booker.name}{b.companions.length > 0 && <span style={{ color: '#1D9E75', fontWeight: 700 }}> +{b.companions.length}</span>}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.booker.treatmentRequest || '-'}</div>
+                            </div>
+                            <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg, borderRadius: 6, padding: '2px 7px' }}>{STATUS_SHORT[s] ?? s}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
             </div>
