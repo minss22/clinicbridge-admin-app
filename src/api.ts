@@ -104,7 +104,7 @@ export const adminApi = {
   deleteBranch: (branchId: string) => adminPost('admin-branch-delete', { branchId }),
 
   // 고객 관리
-  getCustomers: (): Promise<Customer[]> => adminGet('admin-customers'),
+  getCustomers: (branchId?: string): Promise<Customer[]> => adminGet('admin-customers', branchId ? { branchId } : {}),
   getCustomerReservations: (lineUserId: string): Promise<Booking[]> =>
     adminGet('admin-customer-reservations', { lineUserId }),
   updateCustomerNameKo: (lineUserId: string, nameKo: string) =>

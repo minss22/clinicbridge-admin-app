@@ -92,10 +92,10 @@ function AdminShell({ session }: { session: Session | null }) {
         </div>
       </aside>
       <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', background: '#F7F8FA' }}>
-        <div style={{ maxWidth: view === 'reservations' ? '100%' : 760, margin: '0 auto' }}>
+        <div style={{ maxWidth: (view === 'reservations' || view === 'customers') ? '100%' : 760, margin: '0 auto' }}>
           {view === 'reservations' && <ReservationsView isBranch={isBranch} />}
           {view === 'branches' && <BranchesView isBranch={isBranch} />}
-          {view === 'customers' && <CustomersView />}
+          {view === 'customers' && <CustomersView isBranch={isBranch} />}
           {view === 'admins' && me?.role === 'super' && <AdminsView myEmail={session?.user.email ?? undefined} />}
         </div>
       </main>
@@ -1316,7 +1316,7 @@ const CUST_LIST_HEADERS: { label: string; align: React.CSSProperties['textAlign'
   { label: '로마자', align: 'left' }, { label: '생년월일', align: 'left' }, { label: '성별', align: 'left' }, { label: '등록일', align: 'left' },
 ]
 // 고객 상세의 예약 내역 — 예약관리와 동일 레이아웃의 읽기 전용 표(동반자 그룹 박스)
-const CUST_RES_GRID = '116px minmax(96px,1.3fr) 104px 52px 60px minmax(110px,1.4fr) 96px'
+const CUST_RES_GRID = '116px 84px minmax(96px,1.2fr) 100px 50px 58px minmax(100px,1.3fr) 88px 88px'
 function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
   const personRow = (b: Booking, p: Person, isComp: boolean) => (
@@ -1328,6 +1328,7 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
           {isClinicProposed(b) && <span style={{ fontSize: 10, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
         </div>
       ), { textAlign: 'center', whiteSpace: 'normal' })}
+      {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center' })}
       {cell(
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
           <b style={{ color: isComp ? '#222' : '#111' }}>{isComp && <span style={{ color: '#7bbf9f', marginRight: 4 }}>↳</span>}{p.nameKo || p.name}</b>
@@ -1339,13 +1340,14 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
       {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
       {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
+      {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
     </div>
   )
   return (
     <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: CUST_RES_GRID, gap: '0 12px', padding: '10px 14px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
-        {['예약 일시', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태'].map((h, i) => (
-          <div key={i} style={{ fontSize: 11.5, fontWeight: 700, color: '#888', textAlign: i === 5 ? 'left' : 'center', whiteSpace: 'nowrap' }}>{h}</div>
+        {['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태', '접수일자'].map((h, i) => (
+          <div key={i} style={{ fontSize: 11.5, fontWeight: 700, color: '#888', textAlign: i === 6 ? 'left' : 'center', whiteSpace: 'nowrap' }}>{h}</div>
         ))}
       </div>
       {bookings.map((b, i) => {
@@ -1362,7 +1364,7 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
   )
 }
 
-function CustomersView() {
+function CustomersView({ isBranch }: { isBranch?: boolean }) {
   const [list, setList] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Customer | null>(null)
@@ -1370,8 +1372,11 @@ function CustomersView() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [branchId, setBranchId] = useState('')   // 슈퍼 관리자용 병원 필터 (빈값=전체)
 
-  useEffect(() => { adminApi.getCustomers().then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }, [])
+  useEffect(() => { if (!isBranch) adminApi.getBranches().then(setBranches).catch(() => {}) }, [isBranch])
+  useEffect(() => { setLoading(true); adminApi.getCustomers(branchId || undefined).then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }, [branchId])
   const open = async (c: Customer) => {
     setSel(c); setResv(null); setEditing(false)
     try { setResv(await adminApi.getCustomerReservations(c.lineUserId)) } catch { setResv([]) }
@@ -1419,11 +1424,19 @@ function CustomersView() {
     </div>
   )
 
-  if (loading) return <Center small>불러오는 중…</Center>
   return (
     <div>
-      <h2 style={{ fontSize: 16, margin: '16px 0' }}>고객 ({list.length}) · 등록순</h2>
-      {list.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p> : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
+        <h2 style={{ fontSize: 16, margin: 0 }}>고객 ({list.length}) · 등록순</h2>
+        <div style={{ flex: 1 }} />
+        {!isBranch && (
+          <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ height: 36, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
+            <option value="">전체 병원</option>
+            {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
+          </select>
+        )}
+      </div>
+      {loading ? <Center small>불러오는 중…</Center> : list.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p> : (
         <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
             {CUST_LIST_HEADERS.map((h, i) => <div key={i} style={{ ...headCell, textAlign: h.align }}>{h.label}</div>)}
