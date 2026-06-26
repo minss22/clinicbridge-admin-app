@@ -19,6 +19,13 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> =
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
+// 이번 달 1일 ~ 말일 (YYYY-MM-DD) — 예약관리 날짜 검색 기본값
+const thisMonthRange = (): [string, string] => {
+  const d = new Date(); const y = d.getFullYear(), m = d.getMonth()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const last = new Date(y, m + 1, 0)
+  return [`${y}-${pad(m + 1)}-01`, `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`]
+}
 
 // 개발용: true면 로그인 없이 바로 대시보드 (백엔드 ADMIN_AUTH_DISABLED와 함께 사용)
 const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
@@ -431,8 +438,8 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
   const [proposeTarget, setProposeTarget] = useState<Booking | null>(null)   // 시간 제안 모달
   const [drawerTarget, setDrawerTarget] = useState<Booking | null>(null)     // 예약 상세 드로어
   const [query, setQuery] = useState('')      // 이름 검색
-  const [from, setFrom] = useState('')         // 날짜 범위 시작 (빈값=제한없음)
-  const [to, setTo] = useState('')             // 날짜 범위 종료 (빈값=제한없음)
+  const [from, setFrom] = useState(thisMonthRange()[0])   // 날짜 범위 시작 (기본=이번 달 1일, 빈값=제한없음)
+  const [to, setTo] = useState(thisMonthRange()[1])       // 날짜 범위 종료 (기본=이번 달 말일)
   const [fromTime, setFromTime] = useState(''); const [toTime, setToTime] = useState('')  // 예약 시간 범위
   const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
   const [sortKey, setSortKey] = useState<string>('created')        // 정렬 컬럼
@@ -1055,7 +1062,7 @@ function BranchesView({ isBranch }: { isBranch?: boolean }) {
   const load = () => { setLoading(true); adminApi.getAdminBranches().then(l => { setList(l); if (isBranch && l.length) setSelected(s => s ?? l[0]) }).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }
   useEffect(() => { load() }, [])
 
-  if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} canDelete={!isBranch}
+  if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} canDelete={!isBranch} isBranch={isBranch}
     onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); setSelected(saved); load() }} />
   if (selected) return <BranchDetail b={selected} hideBack={isBranch} isBranch={isBranch} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
   if (loading) return <Center small>불러오는 중…</Center>
@@ -1126,7 +1133,7 @@ function BranchDetail({ b, onBack, onEdit, onChanged, hideBack, isBranch }: { b:
           <span>기본 정보</span>
           <button onClick={onEdit} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #1D9E75', background: '#fff', color: '#1D9E75', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>수정</button>
         </div>
-        <Row k="병원 ID" v={b.branchId} />
+        {!isBranch && <Row k="병원 ID" v={b.branchId} />}
         <Row k="주소 (한국어)" v={b.address} />
         <Row k="주소 (일본어)" v={b.addressJa} />
         <Row k="영업시간" v={`${b.openTime || '-'} ~ ${b.closeTime || '-'}`} />
@@ -1252,7 +1259,7 @@ function BranchCalendar({ b, holidays, onToggleHoliday, onToggleBlocked }: {
   )
 }
 
-function BranchForm({ init, isNew, canDelete, onClose, onSaved }: { init: AdminBranch; isNew: boolean; canDelete?: boolean; onClose: () => void; onSaved: (saved: AdminBranch | null) => void }) {
+function BranchForm({ init, isNew, canDelete, isBranch, onClose, onSaved }: { init: AdminBranch; isNew: boolean; canDelete?: boolean; isBranch?: boolean; onClose: () => void; onSaved: (saved: AdminBranch | null) => void }) {
   const [b, setB] = useState<AdminBranch>(init)
   const [busy, setBusy] = useState(false)
   const set = (k: keyof AdminBranch, v: any) => setB(prev => ({ ...prev, [k]: v }))
@@ -1276,8 +1283,11 @@ function BranchForm({ init, isNew, canDelete, onClose, onSaved }: { init: AdminB
       <button onClick={onClose} style={ghostBtn}>← 목록</button>
       <h2 style={{ fontSize: 17, margin: '10px 0 4px' }}>{isNew ? '새 병원 추가' : '병원 수정'}</h2>
 
-      <Lbl>병원 ID (LINE 채널 ID{isNew ? '' : ', 변경 불가'})</Lbl>
-      <Txt value={b.branchId} onChange={v => set('branchId', v)} disabled={!isNew} placeholder="2008835257" />
+      {/* 병원 ID는 슈퍼 관리자만 (병원 관리자에겐 숨김) */}
+      {!isBranch && <>
+        <Lbl>병원 ID (LINE 채널 ID{isNew ? '' : ', 변경 불가'})</Lbl>
+        <Txt value={b.branchId} onChange={v => set('branchId', v)} disabled={!isNew} />
+      </>}
       <Lbl>이름 (한국어)</Lbl><Txt value={b.name} onChange={v => set('name', v)} />
       <Lbl>이름 (일본어)</Lbl><Txt value={b.nameJa} onChange={v => set('nameJa', v)} />
       <Lbl>주소 (한국어)</Lbl><Txt value={b.address} onChange={v => set('address', v)} />
@@ -1295,10 +1305,13 @@ function BranchForm({ init, isNew, canDelete, onClose, onSaved }: { init: AdminB
       </div>
       <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감 {b.closeBufferMin || 0}분 · 점심 시작 {b.lunchBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
       <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 10 }}>※ 휴무 요일·휴무일·마감 시간은 병원 상세 페이지에서 바로 설정할 수 있습니다.</div>
-      <Lbl>매니저 LINE ID <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>예약 알림을 받을 LINE userId</span></Lbl>
-      <Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
-      <Lbl>채널 액세스 토큰 <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>이 병원 LINE 공식계정의 Messaging API 토큰</span></Lbl>
-      <Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
+      {/* 매니저 LINE ID·채널 토큰은 슈퍼 관리자만 (병원 관리자에겐 숨김) */}
+      {!isBranch && <>
+        <Lbl>매니저 LINE ID <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>예약 알림을 받을 LINE userId</span></Lbl>
+        <Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
+        <Lbl>채널 액세스 토큰 <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>이 병원 LINE 공식계정의 Messaging API 토큰</span></Lbl>
+        <Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
+      </>}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
         <button disabled={busy} onClick={save} style={{ ...primaryBtn, flex: 1, padding: '12px' }}>{busy ? '저장 중…' : '저장'}</button>
