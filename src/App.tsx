@@ -769,10 +769,12 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
     </div>
   )
 
-  // 동반자(함께 예약된 고객)가 있으면 예약자+동반자를 연녹색 배경 + 왼쪽 초록 띠로 한 그룹으로 묶는다
+  // 동반자(함께 예약된 고객)가 있으면 예약자+동반자를 연녹색 배경으로 묶고,
+  // 왼쪽 초록 띠는 위·아래를 살짝 띄워(inset) 연속된 그룹의 경계가 구분되게 한다.
   const grouped = b.companions.length > 0
   return (
-    <div onClick={onOpen} style={{ cursor: 'pointer', background: grouped ? '#F4FAF7' : '#fff', borderLeft: `3px solid ${grouped ? '#1D9E75' : 'transparent'}`, ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
+    <div onClick={onOpen} style={{ position: 'relative', cursor: 'pointer', background: grouped ? '#F4FAF7' : '#fff', ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
+      {grouped && <div style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2, background: '#1D9E75' }} />}
       {personRow(b.booker, false)}
       {b.companions.map((c) => personRow(c, true))}
     </div>
@@ -1303,7 +1305,8 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
       {bookings.map((b, i) => {
         const grouped = b.companions.length > 0
         return (
-          <div key={b.groupId} style={{ background: grouped ? '#F4FAF7' : '#fff', borderLeft: `3px solid ${grouped ? '#1D9E75' : 'transparent'}`, ...(i === bookings.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
+          <div key={b.groupId} style={{ position: 'relative', background: grouped ? '#F4FAF7' : '#fff', ...(i === bookings.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
+            {grouped && <div style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2, background: '#1D9E75' }} />}
             {personRow(b, b.booker, false)}
             {b.companions.map(c => personRow(b, c, true))}
           </div>
