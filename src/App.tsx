@@ -1027,7 +1027,7 @@ function BranchesView({ isBranch }: { isBranch?: boolean }) {
 
   if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} canDelete={!isBranch}
     onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); setSelected(saved); load() }} />
-  if (selected) return <BranchDetail b={selected} hideBack={isBranch} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
+  if (selected) return <BranchDetail b={selected} hideBack={isBranch} isBranch={isBranch} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
   if (loading) return <Center small>불러오는 중…</Center>
   return (
     <div>
@@ -1048,7 +1048,7 @@ function BranchesView({ isBranch }: { isBranch?: boolean }) {
   )
 }
 
-function BranchDetail({ b, onBack, onEdit, onChanged, hideBack }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void; hideBack?: boolean }) {
+function BranchDetail({ b, onBack, onEdit, onChanged, hideBack, isBranch }: { b: AdminBranch; onBack: () => void; onEdit: () => void; onChanged: (b: AdminBranch) => void; hideBack?: boolean; isBranch?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [holidays, setHolidays] = useState<Map<string, string>>(new Map())
   // 일정(휴무 요일/점심 없는 요일/휴무일/마감시간)은 상세에서 바로 편집
@@ -1080,13 +1080,16 @@ function BranchDetail({ b, onBack, onEdit, onChanged, hideBack }: { b: AdminBran
         <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{b.nameJa}</div>
       </div>
 
-      <div style={cardStyle}>
-        <div style={sectionTitle}>📱 예약 앱 URL</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input readOnly value={url} onFocus={e => e.currentTarget.select()} style={{ ...inputStyle, flex: 1, color: '#555' }} />
-          <button onClick={copy} style={{ ...primaryBtn, whiteSpace: 'nowrap', background: copied ? '#888' : '#1D9E75' }}>{copied ? '복사됨 ✓' : '복사'}</button>
+      {/* 예약 앱 URL은 슈퍼 관리자에게만 노출 */}
+      {!isBranch && (
+        <div style={cardStyle}>
+          <div style={sectionTitle}>📱 예약 앱 URL</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input readOnly value={url} onFocus={e => e.currentTarget.select()} style={{ ...inputStyle, flex: 1, color: '#555' }} />
+            <button onClick={copy} style={{ ...primaryBtn, whiteSpace: 'nowrap', background: copied ? '#888' : '#1D9E75' }}>{copied ? '복사됨 ✓' : '복사'}</button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={cardStyle}>
         <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
