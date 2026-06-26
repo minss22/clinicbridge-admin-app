@@ -744,7 +744,7 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
   }
 
   const personRow = (p: Person, isComp: boolean) => (
-    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#ECF7F1', borderTop: '1px dashed #CDE9DC' } : {}) }}>
+    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#F4FAF7', borderTop: '1px dashed #CDE9DC' } : {}) }}>
       {cell(isComp
         ? ''
         : <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
@@ -773,7 +773,7 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
   // 왼쪽 초록 띠는 위·아래를 살짝 띄워(inset) 연속된 그룹의 경계가 구분되게 한다.
   const grouped = b.companions.length > 0
   return (
-    <div onClick={onOpen} style={{ position: 'relative', cursor: 'pointer', background: grouped ? '#F4FAF7' : '#fff', ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
+    <div onClick={onOpen} style={{ position: 'relative', cursor: 'pointer', background: '#fff', ...(last ? {} : { borderBottom: '1px solid #EEE' }) }}>
       {grouped && <div style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2, background: '#1D9E75' }} />}
       {personRow(b.booker, false)}
       {b.companions.map((c) => personRow(c, true))}
@@ -1274,7 +1274,7 @@ const CUST_RES_GRID = '116px minmax(96px,1.3fr) 104px 52px 60px minmax(110px,1.4
 function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
   const personRow = (b: Booking, p: Person, isComp: boolean) => (
-    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: CUST_RES_GRID, gap: '0 12px', alignItems: 'center', padding: '11px 14px', ...(isComp ? { background: '#ECF7F1', borderTop: '1px dashed #CDE9DC' } : {}) }}>
+    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: CUST_RES_GRID, gap: '0 12px', alignItems: 'center', padding: '11px 14px', ...(isComp ? { background: '#F4FAF7', borderTop: '1px dashed #CDE9DC' } : {}) }}>
       {cell(isComp ? '' : (
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
           <b>{dot(b.date)} {b.time}</b>
@@ -1305,7 +1305,7 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
       {bookings.map((b, i) => {
         const grouped = b.companions.length > 0
         return (
-          <div key={b.groupId} style={{ position: 'relative', background: grouped ? '#F4FAF7' : '#fff', ...(i === bookings.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
+          <div key={b.groupId} style={{ position: 'relative', background: '#fff', ...(i === bookings.length - 1 ? {} : { borderBottom: '1px solid #EEE' }) }}>
             {grouped && <div style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2, background: '#1D9E75' }} />}
             {personRow(b, b.booker, false)}
             {b.companions.map(c => personRow(b, c, true))}
