@@ -769,7 +769,7 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
             {isReschedulePending(b) && <span style={{ fontSize: 10.5, color: '#1E40AF', fontWeight: 700 }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</span>}
             {isClinicProposed(b) && <span style={{ fontSize: 10.5, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
           </div>, { textAlign: 'center', whiteSpace: 'normal' })}
-      {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center' })}
+      {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center', whiteSpace: 'normal' })}
       {cell(
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
           <b style={{ color: isComp ? '#222' : '#111' }}>{isComp && <span style={{ color: '#7bbf9f', marginRight: 4 }}>↳</span>}{p.nameKo || p.name}</b>
@@ -1316,7 +1316,7 @@ const CUST_LIST_HEADERS: { label: string; align: React.CSSProperties['textAlign'
   { label: '로마자', align: 'left' }, { label: '생년월일', align: 'left' }, { label: '성별', align: 'left' }, { label: '등록일', align: 'left' },
 ]
 // 고객 상세의 예약 내역 — 예약관리와 동일 레이아웃의 읽기 전용 표(동반자 그룹 박스)
-const CUST_RES_GRID = '116px 84px minmax(96px,1.2fr) 100px 50px 58px minmax(100px,1.3fr) 88px 88px'
+const CUST_RES_GRID = '116px 108px minmax(96px,1.2fr) 100px 50px 58px minmax(100px,1.3fr) 88px 88px'
 function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
   const personRow = (b: Booking, p: Person, isComp: boolean) => (
@@ -1328,7 +1328,7 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
           {isClinicProposed(b) && <span style={{ fontSize: 10, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
         </div>
       ), { textAlign: 'center', whiteSpace: 'normal' })}
-      {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center' })}
+      {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center', whiteSpace: 'normal' })}
       {cell(
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
           <b style={{ color: isComp ? '#222' : '#111' }}>{isComp && <span style={{ color: '#7bbf9f', marginRight: 4 }}>↳</span>}{p.nameKo || p.name}</b>
