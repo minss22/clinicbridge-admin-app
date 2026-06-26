@@ -687,15 +687,18 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
   }
   return (
     <div style={{ border: '1px solid #EFEFEF', borderLeft: `5px solid ${sc.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* 1줄: 이름(한국식) / 로마자(아랫줄) / 생년월일·성별  +  상태 */}
+      {/* 1줄: 이름(한국식 + 로마자 옆) / 생년월일·성별(라벨)  +  상태 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, lineHeight: 1.4 }}>
           <span>
             <span style={{ fontSize: 11, color: '#777', background: '#EEE', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>{label}</span>
             <b style={{ fontSize: 14, color: '#111' }}>{p.nameKo || p.name}</b>
+            {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12, marginLeft: 5 }}>{p.name}</span>}
           </span>
-          {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12 }}>{p.name}</span>}
-          <span style={{ fontSize: 12.5, color: '#666' }}>{p.birthDate || '-'} · {genderKo(p.gender)}</span>
+          <span style={{ fontSize: 12.5, color: '#666' }}>
+            <span style={kStyle}>생년월일</span>{p.birthDate || '-'}
+            <span style={{ ...kStyle, marginLeft: 10 }}>성별</span>{genderKo(p.gender)}
+          </span>
         </div>
         {showStatus && <StatusBadge status={st} />}
       </div>
