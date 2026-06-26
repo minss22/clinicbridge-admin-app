@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { adminApi } from './api'
-import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe, AdminUser } from './api'
+import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe, AdminUser, Cursor } from './api'
 
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
@@ -429,118 +429,113 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
 function ReservationsView({ isBranch }: { isBranch?: boolean }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
-  const [bookings, setBookings] = useState<Booking[]>([])
+  const [items, setItems] = useState<Booking[]>([])           // keyset로 누적된 예약 목록
+  const [counts, setCounts] = useState<Record<string, number> | null>(null)  // 탭별 건수(서버)
   const [tab, setTab] = useState<Tab>('action')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true)                // 첫 페이지 로딩
+  const [loadingMore, setLoadingMore] = useState(false)       // 다음 페이지 로딩
+  const [hasMore, setHasMore] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)  // 거절 대상(메시지 모달)
   const [rejectMsg, setRejectMsg] = useState('')
   const [proposeTarget, setProposeTarget] = useState<Booking | null>(null)   // 시간 제안 모달
   const [drawerTarget, setDrawerTarget] = useState<Booking | null>(null)     // 예약 상세 드로어
-  const [query, setQuery] = useState('')      // 이름 검색
+  const [query, setQuery] = useState('')      // 이름 검색(입력값)
+  const [debouncedQuery, setDebouncedQuery] = useState('')    // 디바운스된 검색어(서버 전송)
   const [from, setFrom] = useState(thisMonthRange()[0])   // 날짜 범위 시작 (기본=이번 달 1일, 빈값=제한없음)
   const [to, setTo] = useState(thisMonthRange()[1])       // 날짜 범위 종료 (기본=이번 달 말일)
   const [fromTime, setFromTime] = useState(''); const [toTime, setToTime] = useState('')  // 예약 시간 범위
   const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
-  const [sortKey, setSortKey] = useState<string>('created')        // 정렬 컬럼
-  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')   // 정렬 방향
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [dayDrawer, setDayDrawer] = useState<{ date: string; bookings: Booking[] } | null>(null)
+  const [calMonth, setCalMonth] = useState(thisMonthRange()[0].slice(0, 7))   // 캘린더 표시 월(YYYY-MM)
+  const [calBookings, setCalBookings] = useState<Booking[]>([])               // 그 달 예약(캘린더 전용)
 
-  const load = async (silent = false) => {
-    if (!silent) setLoading(true)
+  const cursorRef = useRef<Cursor>(null)
+  const reqRef = useRef(0)            // 최신 요청 식별 → 오래된 응답 무시
+  const moreLockRef = useRef(false)   // 다음 페이지 동시요청 잠금
+  const hasMoreRef = useRef(false)
+  const ioRef = useRef<IntersectionObserver | null>(null)
+
+  // 병원 목록(드롭다운). 병원 관리자는 자기 병원만 반환됨.
+  useEffect(() => { adminApi.getBranches().then(setBranches).catch(() => {}) }, [])
+  // 이름 검색 디바운스(300ms)
+  useEffect(() => { const t = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(t) }, [query])
+
+  const reqBody = () => ({ branchId: branchId || undefined, status: tab, q: debouncedQuery || undefined, dateField, from: from || undefined, to: to || undefined, fromTime: fromTime || undefined, toTime: toTime || undefined, limit: 30 })
+
+  const fetchFirst = async () => {
+    const my = ++reqRef.current
+    setLoading(true); cursorRef.current = null; hasMoreRef.current = false
     try {
-      const [bs, rs] = await Promise.all([
-        adminApi.getBranches(),
-        adminApi.getReservations(branchId || undefined),
-      ])
-      setBranches(bs)
-      setBookings(rs)
-      setDrawerTarget(dt => dt ? (rs.find(x => x.groupId === dt.groupId) ?? null) : null)  // 열린 드로어 최신화
-    } catch (e: any) {
-      if (!silent) alert(e?.message || '불러오기에 실패했습니다')
-    } finally {
-      if (!silent) setLoading(false)
-    }
+      const page = await adminApi.getReservationsPage(reqBody())
+      if (my !== reqRef.current) return
+      setItems(page.items)
+      cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
+      if (page.counts) setCounts(page.counts)
+      setDrawerTarget(dt => dt ? (page.items.find(x => x.groupId === dt.groupId) ?? dt) : null)
+    } catch (e: any) { if (my === reqRef.current) alert(e?.message || '불러오기에 실패했습니다') }
+    finally { if (my === reqRef.current) setLoading(false) }
   }
-  useEffect(() => { load() }, [branchId])
+  const fetchMore = async () => {
+    if (moreLockRef.current || !hasMoreRef.current || !cursorRef.current) return
+    moreLockRef.current = true; setLoadingMore(true)
+    const my = reqRef.current
+    try {
+      const page = await adminApi.getReservationsPage({ ...reqBody(), cursor: cursorRef.current })
+      if (my !== reqRef.current) return
+      setItems(prev => [...prev, ...page.items])
+      cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
+    } catch { /* 다음 페이지 실패는 조용히 — 재스크롤 시 재시도 */ }
+    finally { moreLockRef.current = false; setLoadingMore(false) }
+  }
+  const fetchMoreRef = useRef(fetchMore); fetchMoreRef.current = fetchMore
 
-  // 자동 새로고침: 탭 복귀 시 즉시 + 15초마다 (조용히)
+  // 필터(병원·탭·검색어·날짜·시간) 변경 시 첫 페이지 재조회 — 리스트 뷰일 때만
+  const filterKey = `${branchId}|${tab}|${debouncedQuery}|${dateField}|${from}|${to}|${fromTime}|${toTime}`
+  useEffect(() => { if (viewMode === 'list') fetchFirst() }, [filterKey, viewMode])
+
+  // 캘린더 뷰: 그 달 예약만 별도 조회
   useEffect(() => {
-    const tick = () => { if (document.visibilityState === 'visible') load(true) }
-    const iv = setInterval(tick, 15000)
-    window.addEventListener('focus', tick)
-    document.addEventListener('visibilitychange', tick)
-    return () => { clearInterval(iv); window.removeEventListener('focus', tick); document.removeEventListener('visibilitychange', tick) }
-  }, [branchId])
+    if (viewMode !== 'calendar') return
+    adminApi.getReservationsMonth(calMonth, branchId || undefined).then(setCalBookings).catch(() => setCalBookings([]))
+  }, [viewMode, calMonth, branchId])
+
+  // 무한 스크롤 센티넬: 노드가 마운트될 때 옵저버 연결
+  const sentinel = useCallback((node: HTMLDivElement | null) => {
+    if (ioRef.current) { ioRef.current.disconnect(); ioRef.current = null }
+    if (node) {
+      ioRef.current = new IntersectionObserver(es => { if (es[0].isIntersecting) fetchMoreRef.current() }, { rootMargin: '300px' })
+      ioRef.current.observe(node)
+    }
+  }, [])
+
+  const refresh = () => {
+    if (viewMode === 'list') fetchFirst()
+    else adminApi.getReservationsMonth(calMonth, branchId || undefined).then(setCalBookings).catch(() => {})
+  }
 
   const act = async (kind: 'confirm' | 'reject', reservationId: string) => {
     if (kind === 'reject') { setRejectTarget(reservationId); setRejectMsg(''); return }  // 거절은 메시지 모달로
     if (!confirm('확정하시겠습니까? (고객에게 알림이 갑니다)')) return
     setBusy(reservationId)
-    try { await adminApi.confirm(reservationId); await load(true) }
+    try { await adminApi.confirm(reservationId); await fetchFirst() }
     catch (e: any) { alert(e?.message || '처리에 실패했습니다') }
     finally { setBusy(null) }
   }
   const doReject = async () => {
     if (!rejectTarget) return
     setBusy(rejectTarget)
-    try { await adminApi.reject(rejectTarget, rejectMsg.trim() || undefined); setRejectTarget(null); await load(true) }
+    try { await adminApi.reject(rejectTarget, rejectMsg.trim() || undefined); setRejectTarget(null); await fetchFirst() }
     catch (e: any) { alert(e?.message || '거절 처리에 실패했습니다') }
     finally { setBusy(null) }
   }
-  const clickHeader = (sk: string | null) => {
-    if (!sk) return
-    if (sortKey === sk) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setSortKey(sk); setSortDir('desc') }
-  }
 
-  const matchTab = (b: Booking, key: Tab) => {
-    const hasCompanionPending = b.booker.status === 'confirmed' && pendingCompanionBatches(b).length > 0
-    if (key === 'action') return isNewPending(b) || isReschedulePending(b) || isClinicProposed(b) || hasCompanionPending
-    if (key === 'pending') return isNewPending(b) || hasCompanionPending
-    if (key === 'reschedule') return isReschedulePending(b)
-    if (key === 'proposed') return isClinicProposed(b)
-    if (key === 'all') return true
-    return b.booker.status === key  // confirmed / rejected / cancelled
-  }
-  // 이름(LINE 프로필명·로마자·한국식) 검색 — 예약자/동반자 전원 대상
-  const matchName = (b: Booking) => {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return true
-    const hay = [b.booker, ...b.companions]
-      .flatMap(p => [p.displayName, p.name, p.nameKo]).join(' ').toLowerCase()
-    return hay.includes(needle)
-  }
-  // 날짜 범위 — 선택한 기준일(접수일/예약일)이 [from, to] 안이면 일치. 한쪽 빈값=개방형.
-  const matchDate = (b: Booking) => {
-    if (!from && !to) return true
-    const d = (dateField === 'created' ? b.createdAt : b.date)
-    if (!d) return false
-    const day = d.slice(0, 10)
-    if (from && day < from) return false
-    if (to && day > to) return false
-    return true
-  }
-  // 예약 시간 범위
-  const matchTime = (b: Booking) => {
-    if (!fromTime && !toTime) return true
-    const t = b.time || ''
-    if (fromTime && t < fromTime) return false
-    if (toTime && t > toTime) return false
-    return true
-  }
-  const filtered = bookings.filter(b => matchTab(b, tab) && matchName(b) && matchDate(b) && matchTime(b))
-  const sorted = [...filtered].sort((a, b) => {
-    const va = sortValue(a, sortKey), vb = sortValue(b, sortKey)
-    const c = va < vb ? -1 : va > vb ? 1 : 0
-    return sortDir === 'asc' ? c : -c
-  })
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
 
   // 거절 대상(reservationId)이 어떤 케이스인지 → 거절 시 동작 설명
   const rejectInfo = (id: string | null): { title: string; desc: string } => {
-    const bk = id ? bookings.find(b => b.booker.id === id) : null
+    const bk = id ? items.find(b => b.booker.id === id) : null
     if (bk) {
       if (isReschedulePending(bk)) return { title: '일시변경 요청 거절', desc: '고객의 일시변경 요청만 거절합니다. 기존 예약은 그대로 유지되며, 고객에게 "변경 불가 · 기존 예약 유효" 알림이 발송됩니다.' }
       if (isClinicProposed(bk)) return { title: '시간 제안 취소', desc: '병원이 제안한 시간을 취소하고 이 예약을 거절합니다. 예약자·동반자 전체가 거절 처리되며 고객에게 거절 알림이 발송됩니다.' }
@@ -566,11 +561,11 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
           </select>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={() => load()} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
+        <button onClick={refresh} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
       </div>
 
       {viewMode === 'calendar' ? (
-        <CalendarView bookings={bookings} onOpenDay={(date, list) => setDayDrawer({ date, bookings: list })} />
+        <CalendarView bookings={calBookings} month={calMonth} onMonthChange={setCalMonth} onOpenDay={(date, list) => setDayDrawer({ date, bookings: list })} />
       ) : (
         <>
           {/* 검색: 날짜 범위 · 시간 범위 · 이름 */}
@@ -585,11 +580,10 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
             </div>
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
           </div>
-          {/* 상태 탭 (정렬은 컬럼 헤더 클릭) */}
+          {/* 상태 탭 — 건수는 서버 집계(현재 날짜·시간·이름 검색 반영). 정렬은 접수일 최신순 고정. */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
             {TABS.map(t => {
-              // 탭 건수도 현재 날짜·시간·이름 검색 조건을 반영
-              const count = bookings.filter(b => matchTab(b, t.key) && matchName(b) && matchDate(b) && matchTime(b)).length
+              const count = counts?.[t.key] ?? 0
               const active = tab === t.key
               const c = TAB_COLOR[t.key]
               const actionActive = t.key === 'action' && active
@@ -602,25 +596,29 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
           </div>
           {loading ? (
             <Center small>불러오는 중…</Center>
-          ) : filtered.length === 0 ? (
+          ) : items.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#999', padding: '40px 0', fontSize: 14 }}>해당 예약이 없습니다.</p>
           ) : (
-            <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
-                {RES_HEADERS.map((h, i) => {
-                  const sk = RES_SORT[i]; const on = !!sk && sortKey === sk
-                  return <div key={i} onClick={() => clickHeader(sk)} style={{ ...headCell, textAlign: RES_ALIGN[i], cursor: sk ? 'pointer' : 'default', color: on ? '#1D9E75' : '#888', userSelect: 'none' }}>{h}{on ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}</div>
-                })}
+            <>
+              <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
+                  {RES_HEADERS.map((h, i) => (
+                    <div key={i} style={{ ...headCell, textAlign: RES_ALIGN[i], color: '#888' }}>{h}</div>
+                  ))}
+                </div>
+                <div>
+                  {items.map((b, i) => <BookingRow key={b.groupId} b={b} last={i === items.length - 1} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
+                </div>
               </div>
-              <div>
-                {sorted.map((b, i) => <BookingRow key={b.groupId} b={b} last={i === sorted.length - 1} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
-              </div>
-            </div>
+              <div ref={sentinel} style={{ height: 1 }} />
+              {loadingMore && <p style={{ textAlign: 'center', color: '#999', fontSize: 13, padding: '14px 0' }}>더 불러오는 중…</p>}
+              {!hasMore && !loadingMore && <p style={{ textAlign: 'center', color: '#CCC', fontSize: 12, padding: '12px 0' }}>마지막입니다</p>}
+            </>
           )}
         </>
       )}
 
-      {proposeTarget && <ProposeModal booking={proposeTarget} onClose={() => setProposeTarget(null)} onDone={() => { setProposeTarget(null); load(true) }} />}
+      {proposeTarget && <ProposeModal booking={proposeTarget} onClose={() => setProposeTarget(null)} onDone={() => { setProposeTarget(null); fetchFirst() }} />}
       {/* 데이 드로어(타임라인)를 닫지 않고 그 위에 상세 드로어를 띄움 → 상세 닫으면 타임라인으로 복귀 */}
       {dayDrawer && <DayDrawer date={dayDrawer.date} bookings={dayDrawer.bookings} onClose={() => setDayDrawer(null)} onOpenBooking={(b) => setDrawerTarget(b)} />}
       {drawerTarget && <ReservationDrawer booking={drawerTarget} busy={busy} act={act} onPropose={() => setProposeTarget(drawerTarget)} onClose={() => setDrawerTarget(null)} backLabel={dayDrawer ? '← 타임라인' : undefined} />}
@@ -651,21 +649,6 @@ const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '�
 const RES_GRID = '130px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 96px 96px 200px'
 // 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
 const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center', 'center']
-// 컬럼별 정렬 키 (null = 정렬 불가)
-const RES_SORT: Array<string | null> = ['reserved', 'branch', 'name', 'birth', 'gender', 'visit', 'treatment', 'status', 'created', null]
-const sortValue = (b: Booking, key: string): string => {
-  switch (key) {
-    case 'reserved': return `${b.date} ${b.time}`
-    case 'branch': return b.branchName || ''
-    case 'name': return b.booker.nameKo || b.booker.name || ''
-    case 'birth': return b.booker.birthDate || ''
-    case 'gender': return b.booker.gender || ''
-    case 'visit': return b.booker.visitType || ''
-    case 'treatment': return b.booker.treatmentRequest || ''
-    case 'status': return bookerDisplayStatus(b)
-    default: return b.createdAt || ''
-  }
-}
 const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 const cellBase: React.CSSProperties = { fontSize: 13, color: '#333', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
@@ -906,15 +889,15 @@ function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, read
 const STATUS_SHORT: Record<string, string> = { pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료', reschedule_req: '변경', rescheduling: '조정' }
 
 // 예약 관리 — 캘린더 뷰 (예약일 기준, 날짜별 상태 건수)
-function CalendarView({ bookings, onOpenDay }: { bookings: Booking[]; onOpenDay: (date: string, list: Booking[]) => void }) {
-  const [ym, setYm] = useState(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7))
+function CalendarView({ bookings, month, onMonthChange, onOpenDay }: { bookings: Booking[]; month: string; onMonthChange: (m: string) => void; onOpenDay: (date: string, list: Booking[]) => void }) {
+  const ym = month
   const [y, m] = ym.split('-').map(Number)
   const startDow = new Date(y, m - 1, 1).getDay()
   const daysInMonth = new Date(y, m, 0).getDate()
   const cells: (string | null)[] = []
   for (let i = 0; i < startDow; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
-  const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); setYm(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
+  const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); onMonthChange(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
   const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 
   // 날짜 → 예약(예약일 기준), 취소·거절 제외하고 표시
@@ -1378,8 +1361,10 @@ function ReadonlyBookingTable({ bookings }: { bookings: Booking[] }) {
 }
 
 function CustomersView({ isBranch }: { isBranch?: boolean }) {
-  const [list, setList] = useState<Customer[]>([])
+  const [items, setItems] = useState<Customer[]>([])     // keyset로 누적된 고객 목록
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [sel, setSel] = useState<Customer | null>(null)
   const [resv, setResv] = useState<Booking[] | null>(null)
   const [editing, setEditing] = useState(false)
@@ -1388,8 +1373,47 @@ function CustomersView({ isBranch }: { isBranch?: boolean }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')   // 슈퍼 관리자용 병원 필터 (빈값=전체)
 
+  const cursorRef = useRef<Cursor>(null)
+  const reqRef = useRef(0)
+  const moreLockRef = useRef(false)
+  const hasMoreRef = useRef(false)
+  const ioRef = useRef<IntersectionObserver | null>(null)
+
   useEffect(() => { if (!isBranch) adminApi.getBranches().then(setBranches).catch(() => {}) }, [isBranch])
-  useEffect(() => { setLoading(true); adminApi.getCustomers(branchId || undefined).then(setList).catch((e: any) => alert(e?.message)).finally(() => setLoading(false)) }, [branchId])
+
+  const fetchFirst = async () => {
+    const my = ++reqRef.current
+    setLoading(true); cursorRef.current = null; hasMoreRef.current = false
+    try {
+      const page = await adminApi.getCustomersPage({ branchId: branchId || undefined, limit: 30 })
+      if (my !== reqRef.current) return
+      setItems(page.items)
+      cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
+    } catch (e: any) { if (my === reqRef.current) alert(e?.message) }
+    finally { if (my === reqRef.current) setLoading(false) }
+  }
+  const fetchMore = async () => {
+    if (moreLockRef.current || !hasMoreRef.current || !cursorRef.current) return
+    moreLockRef.current = true; setLoadingMore(true)
+    const my = reqRef.current
+    try {
+      const page = await adminApi.getCustomersPage({ branchId: branchId || undefined, cursor: cursorRef.current, limit: 30 })
+      if (my !== reqRef.current) return
+      setItems(prev => [...prev, ...page.items])
+      cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
+    } catch { /* 다음 페이지 실패는 조용히 */ }
+    finally { moreLockRef.current = false; setLoadingMore(false) }
+  }
+  const fetchMoreRef = useRef(fetchMore); fetchMoreRef.current = fetchMore
+  useEffect(() => { fetchFirst() }, [branchId])
+  const sentinel = useCallback((node: HTMLDivElement | null) => {
+    if (ioRef.current) { ioRef.current.disconnect(); ioRef.current = null }
+    if (node) {
+      ioRef.current = new IntersectionObserver(es => { if (es[0].isIntersecting) fetchMoreRef.current() }, { rootMargin: '300px' })
+      ioRef.current.observe(node)
+    }
+  }, [])
+
   const open = async (c: Customer) => {
     setSel(c); setResv(null); setEditing(false)
     try { setResv(await adminApi.getCustomerReservations(c.lineUserId)) } catch { setResv([]) }
@@ -1401,7 +1425,7 @@ function CustomersView({ isBranch }: { isBranch?: boolean }) {
       await adminApi.updateCustomerNameKo(sel.lineUserId, draft)
       const v = draft.trim()
       setSel({ ...sel, nameKo: v })
-      setList(prev => prev.map(c => c.lineUserId === sel.lineUserId ? { ...c, nameKo: v } : c))
+      setItems(prev => prev.map(c => c.lineUserId === sel.lineUserId ? { ...c, nameKo: v } : c))
       try { setResv(await adminApi.getCustomerReservations(sel.lineUserId)) } catch { /* 예약 표 갱신 실패는 무시 */ }
       setEditing(false)
     } catch (e: any) { alert(e?.message || '수정에 실패했습니다') }
@@ -1440,7 +1464,7 @@ function CustomersView({ isBranch }: { isBranch?: boolean }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
-        <h2 style={{ fontSize: 16, margin: 0 }}>고객 ({list.length}) · 등록순</h2>
+        <h2 style={{ fontSize: 16, margin: 0 }}>고객 · 등록순</h2>
         <div style={{ flex: 1 }} />
         {!isBranch && (
           <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ height: 36, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }}>
@@ -1449,26 +1473,30 @@ function CustomersView({ isBranch }: { isBranch?: boolean }) {
           </select>
         )}
       </div>
-      {loading ? <Center small>불러오는 중…</Center> : list.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p> : (
-        <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
-            {CUST_LIST_HEADERS.map((h, i) => <div key={i} style={{ ...headCell, textAlign: h.align }}>{h.label}</div>)}
+      {loading ? <Center small>불러오는 중…</Center> : items.length === 0 ? <p style={{ color: '#999', fontSize: 14 }}>고객이 없습니다.</p> : (
+        <>
+          <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
+              {CUST_LIST_HEADERS.map((h, i) => <div key={i} style={{ ...headCell, textAlign: h.align }}>{h.label}</div>)}
+            </div>
+            <div>
+              {items.map((c, i) => (
+                <div key={c.lineUserId} onClick={() => open(c)} style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', alignItems: 'center', minHeight: 48, padding: '8px 16px', cursor: 'pointer', ...(i === items.length - 1 ? {} : { borderBottom: '1px solid #F3F3F3' }) }}>
+                  <div style={{ textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 22, fontSize: 12.5, fontWeight: 700, color: '#1D9E75', background: '#E7F5EE', borderRadius: 999, padding: '2px 8px' }}>{(c as any).reservationCount ?? 0}</span></div>
+                  <div style={{ ...cellBase, color: '#333' }}>{c.displayName || '-'}</div>
+                  <div style={{ ...cellBase, color: '#111', fontWeight: 700 }}>{c.nameKo || c.name || '(이름없음)'}</div>
+                  <div style={{ ...cellBase, color: '#a3a8a3' }}>{c.name || '-'}</div>
+                  <div style={{ ...cellBase, color: '#555' }}>{c.birthDate || '-'}</div>
+                  <div style={{ ...cellBase, color: '#555' }}>{genderKo(c.gender)}</div>
+                  <div style={{ ...cellBase, color: '#555' }}>{dot((c.createdAt || '').slice(0, 10))}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div>
-            {list.map((c, i) => (
-              <div key={c.lineUserId} onClick={() => open(c)} style={{ display: 'grid', gridTemplateColumns: CUST_GRID, gap: '0 12px', alignItems: 'center', minHeight: 48, padding: '8px 16px', cursor: 'pointer', ...(i === list.length - 1 ? {} : { borderBottom: '1px solid #F3F3F3' }) }}>
-                {/* 예약 건수 — getCustomers가 reservationCount를 함께 내려주면 표시됩니다 */}
-                <div style={{ textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 22, fontSize: 12.5, fontWeight: 700, color: '#1D9E75', background: '#E7F5EE', borderRadius: 999, padding: '2px 8px' }}>{(c as any).reservationCount ?? 0}</span></div>
-                <div style={{ ...cellBase, color: '#333' }}>{c.displayName || '-'}</div>
-                <div style={{ ...cellBase, color: '#111', fontWeight: 700 }}>{c.nameKo || c.name || '(이름없음)'}</div>
-                <div style={{ ...cellBase, color: '#a3a8a3' }}>{c.name || '-'}</div>
-                <div style={{ ...cellBase, color: '#555' }}>{c.birthDate || '-'}</div>
-                <div style={{ ...cellBase, color: '#555' }}>{genderKo(c.gender)}</div>
-                <div style={{ ...cellBase, color: '#555' }}>{dot((c.createdAt || '').slice(0, 10))}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+          <div ref={sentinel} style={{ height: 1 }} />
+          {loadingMore && <p style={{ textAlign: 'center', color: '#999', fontSize: 13, padding: '14px 0' }}>더 불러오는 중…</p>}
+          {!hasMore && !loadingMore && <p style={{ textAlign: 'center', color: '#CCC', fontSize: 12, padding: '12px 0' }}>마지막입니다</p>}
+        </>
       )}
     </div>
   )
