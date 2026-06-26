@@ -531,6 +531,18 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
   })
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
 
+  // 거절 대상(reservationId)이 어떤 케이스인지 → 거절 시 동작 설명
+  const rejectInfo = (id: string | null): { title: string; desc: string } => {
+    const bk = id ? bookings.find(b => b.booker.id === id) : null
+    if (bk) {
+      if (isReschedulePending(bk)) return { title: '일시변경 요청 거절', desc: '고객의 일시변경 요청만 거절합니다. 기존 예약은 그대로 유지되며, 고객에게 "변경 불가 · 기존 예약 유효" 알림이 발송됩니다.' }
+      if (isClinicProposed(bk)) return { title: '시간 제안 취소', desc: '병원이 제안한 시간을 취소하고 이 예약을 거절합니다. 예약자·동반자 전체가 거절 처리되며 고객에게 거절 알림이 발송됩니다.' }
+      return { title: '예약 거절', desc: '이 예약을 거절합니다. 예약자와 동반자 전체가 거절 처리되며, 고객에게 거절 알림이 발송됩니다.' }
+    }
+    // 예약자 행이 아니면 = 확정 예약에 추가된 동반자 batch 거절
+    return { title: '동반자 추가 거절', desc: '나중에 추가된 동반자만 거절합니다. 기존 확정 예약(예약자·기존 동반자)은 영향받지 않습니다.' }
+  }
+
   return (
     <div>
       {/* 상단: 리스트/캘린더 전환 · 병원 · 새로고침 */}
@@ -608,8 +620,9 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
       {rejectTarget && (
         <div onClick={() => { if (!busy) setRejectTarget(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 380, fontFamily: 'system-ui, sans-serif' }}>
-            <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>예약 거절</h3>
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#888', lineHeight: 1.6 }}>고객에게 거절 알림이 발송됩니다. 아래 메시지를 적으면 알림 뒤에 함께 보냅니다(일본어로 번역되어 전달).</p>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>{rejectInfo(rejectTarget).title}</h3>
+            <div style={{ margin: '0 0 10px', fontSize: 13, color: '#9A3412', background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, padding: '9px 11px', lineHeight: 1.6 }}>{rejectInfo(rejectTarget).desc}</div>
+            <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#888', lineHeight: 1.6 }}>아래 메시지를 적으면 거절 알림 뒤에 함께 보냅니다(일본어로 번역되어 전달).</p>
             <textarea value={rejectMsg} onChange={e => setRejectMsg(e.target.value)} rows={4} placeholder="고객에게 보낼 메시지 (선택)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }} />
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button disabled={!!busy} onClick={() => setRejectTarget(null)} style={{ flex: 1, padding: '11px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', color: '#666', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>취소</button>
