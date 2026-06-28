@@ -51,6 +51,15 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   }
 }
 
+// 알림 끄기 — 브라우저 구독 해제. (DB의 죽은 구독은 다음 발송 시 404/410으로 자동 정리)
+export async function disablePush(): Promise<boolean> {
+  if (!pushSupported()) return false
+  const reg = await navigator.serviceWorker.getRegistration()
+  const sub = reg ? await reg.pushManager.getSubscription() : null
+  if (!sub) return true
+  try { await sub.unsubscribe(); return true } catch { return false }
+}
+
 // 앱이 다시 보일 때 배지/안읽음 카운트 초기화
 export function clearBadge() {
   try { (navigator as any).clearAppBadge?.() } catch { /* 미지원 무시 */ }
