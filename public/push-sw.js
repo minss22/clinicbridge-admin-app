@@ -51,6 +51,9 @@ self.addEventListener('push', (event) => {
       renotify: true,
       data: { url: d.url || '/' },
     })
+    // 열려 있는 앱에 새로고침 신호 (목록 즉시 갱신)
+    const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    for (const c of cs) c.postMessage({ type: 'cb:refresh' })
   })())
 })
 

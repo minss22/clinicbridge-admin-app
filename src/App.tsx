@@ -78,7 +78,10 @@ function AdminShell({ session }: { session: Session | null }) {
     const onVis = () => { if (document.visibilityState === 'visible') clearBadge() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', clearBadge)
-    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', clearBadge) }
+    // 서비스워커가 푸시 수신 시 보내는 신호 → 화면 자동 새로고침 이벤트로 변환
+    const onSw = (e: MessageEvent) => { if ((e.data as any)?.type === 'cb:refresh') window.dispatchEvent(new Event('cb:refresh')) }
+    navigator.serviceWorker?.addEventListener('message', onSw)
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', clearBadge); navigator.serviceWorker?.removeEventListener('message', onSw) }
   }, [])
 
   if (access === 'checking') return <Center>불러오는 중…</Center>
@@ -511,9 +514,10 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
 
   const reqBody = () => ({ branchId: branchId || undefined, status: tab, q: debouncedQuery || undefined, dateField, from: from || undefined, to: to || undefined, fromTime: fromTime || undefined, toTime: toTime || undefined, limit: 30 })
 
-  const fetchFirst = async () => {
+  const fetchFirst = async (silent = false) => {
     const my = ++reqRef.current
-    setLoading(true); cursorRef.current = null; hasMoreRef.current = false
+    if (!silent) setLoading(true)
+    cursorRef.current = null; hasMoreRef.current = false
     try {
       const page = await adminApi.getReservationsPage(reqBody())
       if (my !== reqRef.current) return
@@ -521,8 +525,8 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
       cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
       if (page.counts) setCounts(page.counts)
       setDrawerTarget(dt => dt ? (page.items.find(x => x.groupId === dt.groupId) ?? dt) : null)
-    } catch (e: any) { if (my === reqRef.current) alert(e?.message || '불러오기에 실패했습니다') }
-    finally { if (my === reqRef.current) setLoading(false) }
+    } catch (e: any) { if (!silent && my === reqRef.current) alert(e?.message || '불러오기에 실패했습니다') }
+    finally { if (!silent && my === reqRef.current) setLoading(false) }
   }
   const fetchMore = async () => {
     if (moreLockRef.current || !hasMoreRef.current || !cursorRef.current) return
@@ -557,10 +561,19 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
     }
   }, [])
 
-  const refresh = () => {
-    if (viewMode === 'list') fetchFirst()
+  const refresh = (silent = false) => {
+    if (viewMode === 'list') fetchFirst(silent)
     else adminApi.getReservationsMonth(calMonth, branchId || undefined).then(setCalBookings).catch(() => {})
   }
+  // 앱이 다시 보일 때(알림 클릭/탭 복귀) + 푸시 수신 시 목록 자동 새로고침(로딩 깜빡임 없이)
+  const refreshRef = useRef(refresh); refreshRef.current = refresh
+  useEffect(() => {
+    const fire = () => { if (document.visibilityState !== 'hidden') refreshRef.current(true) }
+    window.addEventListener('focus', fire)
+    window.addEventListener('cb:refresh', fire)
+    document.addEventListener('visibilitychange', fire)
+    return () => { window.removeEventListener('focus', fire); window.removeEventListener('cb:refresh', fire); document.removeEventListener('visibilitychange', fire) }
+  }, [])
 
   const act = async (kind: 'confirm' | 'reject', reservationId: string) => {
     if (kind === 'reject') { setRejectTarget(reservationId); setRejectMsg(''); return }  // 거절은 메시지 모달로
@@ -608,7 +621,7 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
           </select>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={refresh} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
+        <button onClick={() => refresh()} title="새로고침" style={{ height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', fontSize: 15, cursor: 'pointer' }}>↻</button>
       </div>
 
       {viewMode === 'calendar' ? (
