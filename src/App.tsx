@@ -1047,7 +1047,7 @@ function BranchesView({ isBranch }: { isBranch?: boolean }) {
 
   if (editing) return <BranchForm init={editing.b} isNew={editing.isNew} canDelete={!isBranch} isBranch={isBranch}
     onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); setSelected(saved); load() }} />
-  if (selected) return <BranchDetail b={selected} hideBack={isBranch} isBranch={isBranch} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
+  if (selected) return <BranchDetail key={selected.branchId} b={selected} hideBack={isBranch} isBranch={isBranch} onBack={() => setSelected(null)} onEdit={() => setEditing({ b: selected, isNew: false })} onChanged={(nb) => { setSelected(nb); load() }} />
   if (loading) return <Center small>불러오는 중…</Center>
   return (
     <div>
@@ -1073,8 +1073,9 @@ function BranchDetail({ b, onBack, onEdit, onChanged, hideBack, isBranch }: { b:
   const [holidays, setHolidays] = useState<Map<string, string>>(new Map())
   // 일정(휴무 요일/점심 없는 요일/휴무일/마감시간)은 상세에서 바로 편집
   const [sched, setSched] = useState({ closedDays: b.closedDays, noLunchDays: b.noLunchDays, holidayDates: b.holidayDates, blockedSlots: b.blockedSlots })
-  const [dirty, setDirty] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')  // 자동 저장 상태
+  const savingRef = useRef(false)
+  const pendingRef = useRef<typeof sched | null>(null)
   useEffect(() => { adminApi.getHolidays().then(h => setHolidays(new Map(h.map(x => [x.date, x.name])))).catch(() => {}) }, [])
 
   const url = `https://liff.line.me/${LIFF_ID}?branch=${b.branchId}`
@@ -1083,13 +1084,34 @@ function BranchDetail({ b, onBack, onEdit, onChanged, hideBack, isBranch }: { b:
     catch { prompt('URL 복사', url) }
   }
   const bCal = { ...b, ...sched }   // 캘린더 슬롯 계산 + 표시용
-  const toggleDay = (key: 'closedDays' | 'noLunchDays', d: number) => { setSched(p => ({ ...p, [key]: p[key].includes(d) ? p[key].filter(x => x !== d) : [...p[key], d] })); setDirty(true) }
-  const toggleHoliday = (date: string) => { setSched(p => ({ ...p, holidayDates: p.holidayDates.includes(date) ? p.holidayDates.filter(x => x !== date) : [...p.holidayDates, date] })); setDirty(true) }
-  const toggleBlocked = (date: string, time: string) => { const key = `${date} ${time}`; setSched(p => ({ ...p, blockedSlots: p.blockedSlots.includes(key) ? p.blockedSlots.filter(x => x !== key) : [...p.blockedSlots, key] })); setDirty(true) }
-  const saveSched = async () => {
-    setBusy(true)
-    try { const merged = { ...b, ...sched }; await adminApi.saveBranch(merged); setDirty(false); onChanged(merged) }
-    catch (e: any) { alert(e?.message || '저장 실패') } finally { setBusy(false) }
+  // 토글 즉시 자동 저장. 연속 토글은 최신값으로 합쳐 1건씩 직렬 저장(유실·경쟁 방지).
+  const autoSave = async (next: typeof sched) => {
+    pendingRef.current = next
+    if (savingRef.current) return
+    savingRef.current = true
+    setStatus('saving')
+    let merged = { ...b, ...next }
+    try {
+      while (pendingRef.current) {
+        merged = { ...b, ...pendingRef.current }
+        pendingRef.current = null
+        await adminApi.saveBranch(merged)
+      }
+      savingRef.current = false
+      setStatus('saved'); onChanged(merged)
+      window.setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 2000)
+    } catch {
+      savingRef.current = false; pendingRef.current = null; setStatus('error')
+    }
+  }
+  const apply = (next: typeof sched) => { setSched(next); autoSave(next) }
+  const toggleDay = (key: 'closedDays' | 'noLunchDays', d: number) =>
+    apply({ ...sched, [key]: sched[key].includes(d) ? sched[key].filter(x => x !== d) : [...sched[key], d] })
+  const toggleHoliday = (date: string) =>
+    apply({ ...sched, holidayDates: sched.holidayDates.includes(date) ? sched.holidayDates.filter(x => x !== date) : [...sched.holidayDates, date] })
+  const toggleBlocked = (date: string, time: string) => {
+    const key = `${date} ${time}`
+    apply({ ...sched, blockedSlots: sched.blockedSlots.includes(key) ? sched.blockedSlots.filter(x => x !== key) : [...sched.blockedSlots, key] })
   }
 
   return (
@@ -1127,7 +1149,9 @@ function BranchDetail({ b, onBack, onEdit, onChanged, hideBack, isBranch }: { b:
       <div style={cardStyle}>
         <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>휴무 / 마감 시간 설정</span>
-          <button disabled={!dirty || busy} onClick={saveSched} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 700, cursor: dirty ? 'pointer' : 'default', background: dirty ? '#1D9E75' : '#E5E7EB', color: '#fff' }}>{busy ? '저장 중…' : '저장'}</button>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: status === 'error' ? '#E53E3E' : status === 'saved' ? '#1D9E75' : '#9CA3AF' }}>
+            {status === 'saving' ? '저장 중…' : status === 'saved' ? '저장됨 ✓' : status === 'error' ? '저장 실패 · 다시 눌러주세요' : '변경 시 자동 저장'}
+          </span>
         </div>
         <Lbl>휴무 요일</Lbl><DayRow value={sched.closedDays} onToggle={d => toggleDay('closedDays', d)} />
         <Lbl>점심 없는 요일</Lbl><DayRow value={sched.noLunchDays} onToggle={d => toggleDay('noLunchDays', d)} />
