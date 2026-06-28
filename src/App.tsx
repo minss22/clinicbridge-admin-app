@@ -81,8 +81,12 @@ function AdminShell({ session, openId }: { session: Session | null; openId?: str
     const onVis = () => { if (document.visibilityState === 'visible') clearBadge() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', clearBadge)
-    // 서비스워커가 푸시 수신 시 보내는 신호 → 화면 자동 새로고침 이벤트로 변환
-    const onSw = (e: MessageEvent) => { if ((e.data as any)?.type === 'cb:refresh') window.dispatchEvent(new Event('cb:refresh')) }
+    // 서비스워커 신호 → 화면 이벤트로 변환 (새로고침 / 알림 클릭 시 상세 열기)
+    const onSw = (e: MessageEvent) => {
+      const d = e.data as any
+      if (d?.type === 'cb:refresh') window.dispatchEvent(new Event('cb:refresh'))
+      else if (d?.type === 'cb:open' && d.id) { setView('reservations'); window.dispatchEvent(new CustomEvent('cb:open', { detail: d.id })) }
+    }
     navigator.serviceWorker?.addEventListener('message', onSw)
     return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', clearBadge); navigator.serviceWorker?.removeEventListener('message', onSw) }
   }, [])
@@ -156,7 +160,7 @@ function NotifyButton() {
     else if (r.reason === 'unsupported') { setState('off'); alert('이 브라우저/환경은 알림을 지원하지 않습니다. 설치된 앱(홈 화면 추가)에서 다시 시도해 주세요.') }
     else { setState('off'); alert('알림 설정 실패\n원인: ' + (r.reason || '알 수 없음')) }
   }
-  const label = state === 'on' ? '🔔 알림 켜짐 (누르면 끄기)' : state === 'denied' ? '🔕 알림 차단됨' : state === 'working' ? '처리 중…' : '🔕 알림 꺼짐 (누르면 켜기)'
+  const label = state === 'on' ? '🔔 알림 켜짐' : state === 'denied' ? '🔕 알림 차단됨' : state === 'working' ? '처리 중…' : '🔕 알림 꺼짐'
   const disabled = state === 'denied' || state === 'working'
   return (
     <button onClick={onClick} disabled={disabled} title={state === 'denied' ? '브라우저 설정에서 알림을 허용해야 합니다' : ''}
@@ -585,17 +589,25 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
     return () => { window.removeEventListener('focus', fire); window.removeEventListener('cb:refresh', fire); document.removeEventListener('visibilitychange', fire) }
   }, [])
 
-  // 푸시 알림 클릭(?open=<id>) → 목록 로드되면 해당 예약 상세 드로어 1회 자동 오픈
-  const openedRef = useRef<string | null>(null)
+  // 푸시 알림 클릭 → 해당 예약 상세 드로어 열기.
+  // 부팅 진입은 prop openId(?open=), 이미 열린 앱은 SW의 cb:open 메시지로 들어옴.
+  const [pendingOpen, setPendingOpen] = useState<string | undefined>(openId)
   useEffect(() => {
-    if (!openId || openedRef.current === openId) return
-    const b = items.find(x => x.booker.id === openId || x.companions.some(c => c.id === openId))
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent).detail as string
+      if (id) { setPendingOpen(id); refreshRef.current(true) }   // 최신 목록에 포함되도록 새로고침
+    }
+    window.addEventListener('cb:open', onOpen)
+    return () => window.removeEventListener('cb:open', onOpen)
+  }, [])
+  useEffect(() => {
+    if (!pendingOpen) return
+    const b = items.find(x => x.booker.id === pendingOpen || x.companions.some(c => c.id === pendingOpen))
     if (b) {
-      openedRef.current = openId
-      setDrawerTarget(b)
+      setDrawerTarget(b); setPendingOpen(undefined)
       try { window.history.replaceState({}, '', window.location.pathname) } catch { /* noop */ }
     }
-  }, [openId, items])
+  }, [pendingOpen, items])
 
   const act = async (kind: 'confirm' | 'reject', reservationId: string) => {
     if (kind === 'reject') { setRejectTarget(reservationId); setRejectMsg(''); return }  // 거절은 메시지 모달로

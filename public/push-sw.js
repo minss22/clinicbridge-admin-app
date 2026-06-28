@@ -61,13 +61,17 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   let url = (event.notification.data && event.notification.data.url) || '/'
   url = url.replace('?manage=', '?open=')   // PWA 알림은 대시보드 상세 드로어로 (확정/거절 단독 페이지 X)
+  let id = null
+  try { id = new URL(url, self.location.origin).searchParams.get('open') } catch (e) { /* noop */ }
   event.waitUntil((async () => {
     await setCount(0); await clearBadge()
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const c of all) {
-      if ('focus' in c) { try { await c.navigate(url) } catch { /* cross-scope */ } return c.focus() }
+      try { await c.focus() } catch (e) { /* noop */ }
+      if (id) c.postMessage({ type: 'cb:open', id })   // 이미 열린 앱: 새로고침 없이 즉시 드로어
+      return
     }
-    if (self.clients.openWindow) return self.clients.openWindow(url)
+    if (self.clients.openWindow) return self.clients.openWindow(id ? '/?open=' + id : '/')
   })())
 })
 
