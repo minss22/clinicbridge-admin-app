@@ -24,6 +24,15 @@ export async function isSubscribed(): Promise<boolean> {
   return !!(await reg.pushManager.getSubscription())
 }
 
+// 이미 브라우저에 구독이 있으면 백엔드에 재저장(이전 저장 실패 복구). 성공 여부 반환.
+export async function syncPush(): Promise<boolean> {
+  if (!pushSupported()) return false
+  const reg = await navigator.serviceWorker.getRegistration()
+  const sub = reg ? await reg.pushManager.getSubscription() : null
+  if (!sub) return false
+  try { await adminApi.subscribePush(sub.toJSON()); return true } catch { return false }
+}
+
 // 권한 요청 → 구독 → 백엔드 저장
 export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   if (!pushSupported()) return { ok: false, reason: 'unsupported' }

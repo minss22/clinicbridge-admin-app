@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { adminApi } from './api'
 import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe, AdminUser, Cursor } from './api'
-import { pushSupported, isSubscribed, enablePush, clearBadge } from './push'
+import { pushSupported, isSubscribed, enablePush, syncPush, clearBadge } from './push'
 
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
@@ -127,12 +127,15 @@ function NotifyButton() {
   useEffect(() => {
     if (!pushSupported()) { setState('unknown'); return }
     if (Notification.permission === 'denied') { setState('denied'); return }
-    isSubscribed().then(s => setState(s ? 'on' : 'off')).catch(() => setState('off'))
+    isSubscribed().then(s => {
+      setState(s ? 'on' : 'off')
+      if (s) syncPush()   // 기존 구독을 백엔드에 재동기화(이전 저장 실패 복구)
+    }).catch(() => setState('off'))
   }, [])
   if (!pushSupported() || state === 'unknown') return null
 
   const onClick = async () => {
-    if (state === 'on' || state === 'working') return
+    if (state === 'working') return   // 켜짐 상태에서도 누르면 재동기화
     setState('working')
     const r = await enablePush()
     if (r.ok) { setState('on'); return }
@@ -140,8 +143,8 @@ function NotifyButton() {
     else if (r.reason === 'unsupported') { setState('off'); alert('이 브라우저/환경은 알림을 지원하지 않습니다. 설치된 앱(홈 화면 추가)에서 다시 시도해 주세요.') }
     else { setState('off'); alert('알림 설정 실패\n원인: ' + (r.reason || '알 수 없음')) }
   }
-  const label = state === 'on' ? '🔔 알림 켜짐' : state === 'denied' ? '🔕 알림 차단됨' : state === 'working' ? '설정 중…' : '🔔 알림 켜기'
-  const disabled = state === 'on' || state === 'denied' || state === 'working'
+  const label = state === 'on' ? '🔔 알림 켜짐 (눌러서 재동기화)' : state === 'denied' ? '🔕 알림 차단됨' : state === 'working' ? '설정 중…' : '🔔 알림 켜기'
+  const disabled = state === 'denied' || state === 'working'
   return (
     <button onClick={onClick} disabled={disabled} title={state === 'denied' ? '브라우저 설정에서 알림을 허용해야 합니다' : ''}
       style={{
