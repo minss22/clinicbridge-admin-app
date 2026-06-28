@@ -59,7 +59,8 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/'
+  let url = (event.notification.data && event.notification.data.url) || '/'
+  url = url.replace('?manage=', '?open=')   // PWA 알림은 대시보드 상세 드로어로 (확정/거절 단독 페이지 X)
   event.waitUntil((async () => {
     await setCount(0); await clearBadge()
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })

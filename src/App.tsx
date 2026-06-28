@@ -34,9 +34,12 @@ const NO_AUTH = (import.meta.env.VITE_ADMIN_NO_AUTH as string) === 'true'
 const LIFF_ID = (import.meta.env.VITE_LIFF_ID as string) || '2010411582-Duzo9BLZ'
 
 export default function App() {
-  // 매니저 예약 처리 페이지(로그인 없음) — 알림 단일 버튼 링크 ?manage=<id>
-  const manageId = new URLSearchParams(window.location.search).get('manage')
+  // 매니저 예약 처리 페이지(로그인 없음, LINE 알림 버튼) — ?manage=<id>
+  const sp = new URLSearchParams(window.location.search)
+  const manageId = sp.get('manage')
   if (manageId) return <ManagerActionPage reservationId={manageId} />
+  // PWA 푸시 알림 클릭 — 대시보드에서 해당 예약 상세 드로어 열기
+  const openId = sp.get('open') || undefined
 
   const [session, setSession] = useState<Session | null | undefined>(undefined)
 
@@ -47,10 +50,10 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  if (NO_AUTH) return <AdminShell session={null} />
+  if (NO_AUTH) return <AdminShell session={null} openId={openId} />
   if (session === undefined) return <Center>불러오는 중…</Center>
   if (!session) return <Login />
-  return <AdminShell session={session} />
+  return <AdminShell session={session} openId={openId} />
 }
 
 // ── 셸: 상단 네비 + 권한 게이트 ───────────────────────────────
@@ -61,7 +64,7 @@ const NAV: { key: View; label: string; superOnly?: boolean }[] = [
   { key: 'customers', label: '고객 관리' },
   { key: 'admins', label: '관리자 관리', superOnly: true },   // 슈퍼 관리자만
 ]
-function AdminShell({ session }: { session: Session | null }) {
+function AdminShell({ session, openId }: { session: Session | null; openId?: string }) {
   const [view, setView] = useState<View>('reservations')
   const [access, setAccess] = useState<'checking' | 'ok' | 'forbidden'>('checking')
   const [me, setMe] = useState<AdminMe | null>(null)
@@ -114,7 +117,7 @@ function AdminShell({ session }: { session: Session | null }) {
       </aside>
       <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', background: '#F7F8FA' }}>
         <div style={{ maxWidth: (view === 'reservations' || view === 'customers') ? '100%' : 760, margin: '0 auto' }}>
-          {view === 'reservations' && <ReservationsView isBranch={isBranch} />}
+          {view === 'reservations' && <ReservationsView isBranch={isBranch} openId={openId} />}
           {view === 'branches' && <BranchesView isBranch={isBranch} />}
           {view === 'customers' && <CustomersView isBranch={isBranch} />}
           {view === 'admins' && me?.role === 'super' && <AdminsView myEmail={session?.user.email ?? undefined} />}
@@ -476,7 +479,7 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
   )
 }
 
-function ReservationsView({ isBranch }: { isBranch?: boolean }) {
+function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: string }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
   const [items, setItems] = useState<Booking[]>([])           // keyset로 누적된 예약 목록
@@ -574,6 +577,18 @@ function ReservationsView({ isBranch }: { isBranch?: boolean }) {
     document.addEventListener('visibilitychange', fire)
     return () => { window.removeEventListener('focus', fire); window.removeEventListener('cb:refresh', fire); document.removeEventListener('visibilitychange', fire) }
   }, [])
+
+  // 푸시 알림 클릭(?open=<id>) → 목록 로드되면 해당 예약 상세 드로어 1회 자동 오픈
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return
+    const b = items.find(x => x.booker.id === openId || x.companions.some(c => c.id === openId))
+    if (b) {
+      openedRef.current = openId
+      setDrawerTarget(b)
+      try { window.history.replaceState({}, '', window.location.pathname) } catch { /* noop */ }
+    }
+  }, [openId, items])
 
   const act = async (kind: 'confirm' | 'reject', reservationId: string) => {
     if (kind === 'reject') { setRejectTarget(reservationId); setRejectMsg(''); return }  // 거절은 메시지 모달로
