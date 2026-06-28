@@ -29,7 +29,9 @@ export default defineConfig({
         // 빌드된 앱 셸만 프리캐시. Supabase API(다른 오리진)는 캐시하지 않아 항상 최신.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/push-sw\.js$/],
         cleanupOutdatedCaches: true,
+        importScripts: ['/push-sw.js'],   // 웹 푸시 수신·배지 핸들러
       },
     }),
   ],

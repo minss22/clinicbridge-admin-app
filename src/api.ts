@@ -131,6 +131,9 @@ export const adminApi = {
   updateCustomerNameKo: (lineUserId: string, nameKo: string) =>
     adminPost('admin-customer-update', { lineUserId, nameKo }),
 
+  // 웹 푸시 구독 등록 (관리자 기기 → 백엔드 저장)
+  subscribePush: (subscription: any) => adminPost('push-subscribe', { subscription }),
+
   // 관리자 관리 (슈퍼 전용)
   listAdmins: (): Promise<AdminUser[]> => adminGet('admin-admins'),
   saveAdmin: (email: string, branchId: string | null) => adminPost('admin-admin-save', { email, branchId }),

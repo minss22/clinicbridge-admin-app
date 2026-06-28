@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { adminApi } from './api'
 import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe, AdminUser, Cursor } from './api'
+import { pushSupported, isSubscribed, enablePush, clearBadge } from './push'
 
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
@@ -71,6 +72,15 @@ function AdminShell({ session }: { session: Session | null }) {
   }, [])
   const isBranch = me?.role === 'branch'
 
+  // 앱이 다시 보이면 배지/안읽음 초기화 (열어서 확인 = 읽음 처리)
+  useEffect(() => {
+    clearBadge()
+    const onVis = () => { if (document.visibilityState === 'visible') clearBadge() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', clearBadge)
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', clearBadge) }
+  }, [])
+
   if (access === 'checking') return <Center>불러오는 중…</Center>
   if (access === 'forbidden') return (
     <Center>
@@ -94,6 +104,7 @@ function AdminShell({ session }: { session: Session | null }) {
           }}>{n.label}</button>
         ))}
         <div style={{ marginTop: 'auto', fontSize: 11.5, color: '#aaa', padding: '0 10px' }}>
+          <NotifyButton />
           <div style={{ wordBreak: 'break-all', marginBottom: 8 }}>{session?.user.email ?? '개발 모드'}</div>
           {session && <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, padding: '6px 10px', fontSize: 12 }}>로그아웃</button>}
         </div>
@@ -107,6 +118,38 @@ function AdminShell({ session }: { session: Session | null }) {
         </div>
       </main>
     </div>
+  )
+}
+
+// 사이드바 알림 켜기 버튼 — 권한 요청 + 푸시 구독
+function NotifyButton() {
+  const [state, setState] = useState<'unknown' | 'on' | 'off' | 'denied' | 'working'>('unknown')
+  useEffect(() => {
+    if (!pushSupported()) { setState('unknown'); return }
+    if (Notification.permission === 'denied') { setState('denied'); return }
+    isSubscribed().then(s => setState(s ? 'on' : 'off')).catch(() => setState('off'))
+  }, [])
+  if (!pushSupported() || state === 'unknown') return null
+
+  const onClick = async () => {
+    if (state === 'on' || state === 'working') return
+    setState('working')
+    const r = await enablePush()
+    if (r.ok) { setState('on'); return }
+    if (r.reason === 'denied') { setState('denied'); alert('브라우저 설정에서 이 사이트의 알림을 허용해 주세요.') }
+    else { setState('off'); alert('알림 설정에 실패했습니다. 설치된 앱(홈 화면 추가)에서 다시 시도해 주세요.') }
+  }
+  const label = state === 'on' ? '🔔 알림 켜짐' : state === 'denied' ? '🔕 알림 차단됨' : state === 'working' ? '설정 중…' : '🔔 알림 켜기'
+  const disabled = state === 'on' || state === 'denied' || state === 'working'
+  return (
+    <button onClick={onClick} disabled={disabled} title={state === 'denied' ? '브라우저 설정에서 알림을 허용해야 합니다' : ''}
+      style={{
+        width: '100%', marginBottom: 8, padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, boxSizing: 'border-box',
+        cursor: disabled ? 'default' : 'pointer',
+        border: `1px solid ${state === 'on' ? '#1D9E75' : state === 'denied' ? '#E5E7EB' : '#1D9E75'}`,
+        background: state === 'on' ? '#E7F5EE' : '#fff',
+        color: state === 'on' ? '#0F7A57' : state === 'denied' ? '#aaa' : '#1D9E75',
+      }}>{label}</button>
   )
 }
 
