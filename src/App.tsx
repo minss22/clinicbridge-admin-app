@@ -137,7 +137,8 @@ function NotifyButton() {
     const r = await enablePush()
     if (r.ok) { setState('on'); return }
     if (r.reason === 'denied') { setState('denied'); alert('브라우저 설정에서 이 사이트의 알림을 허용해 주세요.') }
-    else { setState('off'); alert('알림 설정에 실패했습니다. 설치된 앱(홈 화면 추가)에서 다시 시도해 주세요.') }
+    else if (r.reason === 'unsupported') { setState('off'); alert('이 브라우저/환경은 알림을 지원하지 않습니다. 설치된 앱(홈 화면 추가)에서 다시 시도해 주세요.') }
+    else { setState('off'); alert('알림 설정 실패\n원인: ' + (r.reason || '알 수 없음')) }
   }
   const label = state === 'on' ? '🔔 알림 켜짐' : state === 'denied' ? '🔕 알림 차단됨' : state === 'working' ? '설정 중…' : '🔔 알림 켜기'
   const disabled = state === 'on' || state === 'denied' || state === 'working'

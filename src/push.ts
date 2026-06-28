@@ -29,14 +29,17 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   if (!pushSupported()) return { ok: false, reason: 'unsupported' }
   const perm = await Notification.requestPermission()
   if (perm !== 'granted') return { ok: false, reason: 'denied' }
-  const reg = await navigator.serviceWorker.ready
-  let sub = await reg.pushManager.getSubscription()
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) as BufferSource })
+  try {
+    const reg = await navigator.serviceWorker.ready
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) as BufferSource })
+    }
+    await adminApi.subscribePush(sub.toJSON())
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, reason: e?.message || String(e) || 'failed' }
   }
-  try { await adminApi.subscribePush(sub.toJSON()) }
-  catch (e: any) { return { ok: false, reason: e?.message || 'save-failed' } }
-  return { ok: true }
 }
 
 // 앱이 다시 보일 때 배지/안읽음 카운트 초기화
