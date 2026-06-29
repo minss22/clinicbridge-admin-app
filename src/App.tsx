@@ -5,6 +5,11 @@ import { adminApi } from './api'
 import type { Booking, Branch, Person, AdminBranch, Customer, ManagerProposeInfo, AdminMe, AdminUser, Cursor } from './api'
 import { pushSupported, isSubscribed, enablePush, disablePush, syncPush, clearBadge } from './push'
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
   reschedule_req: '일시변경 요청', rescheduling: '시간 조정 중', companion_add: '동반자 추가 접수',
@@ -130,6 +135,7 @@ function AdminShell({ session, openId }: { session: Session | null; openId?: str
           }}>{n.label}</button>
         ))}
         <div style={{ marginTop: 'auto', fontSize: 11.5, color: '#aaa', padding: '0 10px' }}>
+          <InstallAppButton />
           <NotifyButton />
           <div style={{ wordBreak: 'break-all', marginBottom: 8 }}>{session?.user.email ?? '개발 모드'}</div>
           {session && <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, padding: '6px 10px', fontSize: 12 }}>로그아웃</button>}
@@ -144,6 +150,57 @@ function AdminShell({ session, openId }: { session: Session | null; openId?: str
         </div>
       </main>
     </div>
+  )
+}
+
+// 사이드바 앱 설치 버튼 — PWA 설치 프롬프트를 사용
+function InstallAppButton() {
+  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (window.navigator as any).standalone === true
+    if (standalone) setInstalled(true)
+
+    const onBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault()
+      setPromptEvent(e as BeforeInstallPromptEvent)
+    }
+    const onInstalled = () => {
+      setInstalled(true)
+      setPromptEvent(null)
+    }
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  if (installed) return null
+
+  const onClick = async () => {
+    if (!promptEvent) {
+      alert('현재 브라우저에서는 자동 설치 창을 바로 열 수 없습니다. 주소창 또는 브라우저 메뉴의 "앱 설치"를 사용해 주세요.')
+      return
+    }
+    await promptEvent.prompt()
+    const choice = await promptEvent.userChoice
+    if (choice.outcome === 'accepted') setInstalled(true)
+    setPromptEvent(null)
+  }
+
+  return (
+    <button onClick={onClick} title={promptEvent ? '관리자 앱을 설치합니다' : '설치 조건이 준비되면 브라우저 설치 창이 열립니다'}
+      style={{
+        width: '100%', marginBottom: 8, padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, boxSizing: 'border-box',
+        cursor: 'pointer',
+        border: '1px solid #1D9E75',
+        background: '#fff',
+        color: '#1D9E75',
+      }}>앱 설치하기</button>
   )
 }
 
