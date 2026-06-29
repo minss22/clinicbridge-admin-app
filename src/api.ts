@@ -84,7 +84,7 @@ export type ManagerProposeInfo = {
 export type AdminMe = { role: 'super' | 'branch'; branchId: string | null }
 export type AdminUser = { email: string; branchId: string | null; createdAt?: string }
 export type Cursor = { created: string; id: string } | null
-export type Page<T> = { items: T[]; nextCursor: Cursor; counts?: Record<string, number> | null }
+export type Page<T> = { items: T[]; nextCursor?: Cursor; counts?: Record<string, number> | null; total?: number; page?: number; pageSize?: number; totalPages?: number }
 
 // 빈 값 제거 후 쿼리 파라미터로 (cursor는 cursorCreated/cursorId로 펼침)
 const pageParams = (o: Record<string, any>): Record<string, string> => {
@@ -101,8 +101,8 @@ export const adminApi = {
   getBranches: (): Promise<Branch[]> => adminGet('admin-branches'),
   getReservations: (branchId?: string): Promise<Booking[]> =>
     adminGet('admin-reservations', branchId ? { branchId } : {}),
-  // keyset 무한 스크롤(예약 관리)
-  getReservationsPage: (o: { branchId?: string; status: string; q?: string; dateField?: string; from?: string; to?: string; fromTime?: string; toTime?: string; cursor?: Cursor; limit?: number }): Promise<Page<Booking>> =>
+  // 페이지 번호 방식(예약 관리)
+  getReservationsPage: (o: { branchId?: string; status?: string; statusFilters?: string[]; q?: string; dateField?: string; from?: string; to?: string; fromTime?: string; toTime?: string; page?: number; pageSize?: number; sortKey?: string; sortDir?: 'asc' | 'desc' }): Promise<Page<Booking>> =>
     adminGet('admin-reservations-page', pageParams(o)),
   // 캘린더 뷰 — 그 달 예약만
   getReservationsMonth: (month: string, branchId?: string): Promise<Booking[]> =>

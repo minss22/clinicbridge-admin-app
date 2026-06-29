@@ -7,7 +7,7 @@ import { pushSupported, isSubscribed, enablePush, disablePush, syncPush, clearBa
 
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
-  reschedule_req: '일시변경 요청', rescheduling: '시간 조정 중',
+  reschedule_req: '일시변경 요청', rescheduling: '시간 조정 중', companion_add: '동반자 추가 접수',
 }
 const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
   pending:        { bg: '#FEF3C7', fg: '#92400E', border: '#FCD34D' },
@@ -17,6 +17,7 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string; border: string }> =
   completed:      { bg: '#E0E7FF', fg: '#3730A3', border: '#C7D2FE' },
   reschedule_req: { bg: '#DBEAFE', fg: '#1E40AF', border: '#93C5FD' },
   rescheduling:   { bg: '#FFEDD5', fg: '#9A3412', border: '#FDBA74' },
+  companion_add:  { bg: '#E0F2FE', fg: '#075985', border: '#7DD3FC' },
 }
 const visitKo = (v: string) => (v === 'first' ? '초진' : v === 'return' ? '재진' : v)
 const dot = (d?: string | null) => (d ? d.replace(/-/g, '.') : '')
@@ -26,6 +27,21 @@ const thisMonthRange = (): [string, string] => {
   const pad = (n: number) => String(n).padStart(2, '0')
   const last = new Date(y, m + 1, 0)
   return [`${y}-${pad(m + 1)}-01`, `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`]
+}
+const todayRange = (): [string, string] => {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const s = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return [s, s]
+}
+const thisWeekRange = (): [string, string] => {
+  const d = new Date()
+  const day = d.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  const start = new Date(d); start.setDate(d.getDate() + mondayOffset)
+  const end = new Date(start); end.setDate(start.getDate() + 6)
+  const fmt = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+  return [fmt(start), fmt(end)]
 }
 
 // 개발용: true면 로그인 없이 바로 대시보드 (백엔드 ADMIN_AUTH_DISABLED와 함께 사용)
@@ -195,26 +211,32 @@ function Login() {
 }
 
 // ── 대시보드 ──────────────────────────────────────────────────
-type Tab = 'action' | 'pending' | 'proposed' | 'reschedule' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'action', label: '처리 대기' },          // 예약 접수+시간조정중+일시변경요청 묶음
-  { key: 'pending', label: '예약 접수' },
-  { key: 'proposed', label: '시간 조정 중' },
-  { key: 'reschedule', label: '일시변경 요청' },
-  { key: 'confirmed', label: '확정' },
-  { key: 'rejected', label: '거절' },
-  { key: 'cancelled', label: '취소' },
-  { key: 'all', label: '전체' },
+type TopTab = 'action' | 'waiting' | 'confirmed' | 'closed' | 'all'
+type DetailStatus = 'new' | 'companion_add' | 'reschedule' | 'proposed' | 'confirmed' | 'rejected' | 'cancelled' | 'completed'
+type SortKey = 'createdAt' | 'dateTime' | 'branchName' | 'bookerName' | 'birthDate' | 'gender' | 'visitType' | 'treatment' | 'status'
+type SortDir = 'asc' | 'desc'
+const TOP_TABS: { key: TopTab; label: string; details: DetailStatus[] }[] = [
+  { key: 'action', label: '처리 필요', details: ['new', 'companion_add', 'reschedule'] },
+  { key: 'waiting', label: '고객 응답 대기', details: ['proposed'] },
+  { key: 'confirmed', label: '확정', details: ['confirmed'] },
+  { key: 'closed', label: '종료', details: ['rejected', 'cancelled'] },
+  { key: 'all', label: '전체', details: ['new', 'companion_add', 'reschedule', 'proposed', 'confirmed', 'rejected', 'cancelled', 'completed'] },
 ]
-// 탭별 색 (배경=연한 색 / 글씨=상태 색). 전체=초록 배경+흰 글씨(활성).
-const TAB_COLOR: Record<Tab, { bg: string; fg: string }> = {
-  action: { bg: '#EAB308', fg: '#fff' },   // 활성 시 노란 배경 + 흰 글씨
-  pending: STATUS_COLOR.pending,
-  proposed: STATUS_COLOR.rescheduling,
-  reschedule: STATUS_COLOR.reschedule_req,
+const DETAIL_LABEL: Record<DetailStatus, string> = {
+  new: '신규 접수',
+  companion_add: '동반자 추가 접수',
+  reschedule: '일시변경 요청',
+  proposed: '시간 조정 중',
+  confirmed: '확정',
+  rejected: '거절',
+  cancelled: '취소',
+  completed: '완료',
+}
+const TOP_COLOR: Record<TopTab, { bg: string; fg: string }> = {
+  action: { bg: '#EAB308', fg: '#fff' },
+  waiting: { bg: '#F97316', fg: '#fff' },
   confirmed: STATUS_COLOR.confirmed,
-  rejected: STATUS_COLOR.rejected,
-  cancelled: STATUS_COLOR.cancelled,
+  closed: { bg: '#6B7280', fg: '#fff' },
   all: { bg: '#1D9E75', fg: '#fff' },
 }
 
@@ -236,6 +258,9 @@ const bookerDisplayStatus = (b: Booking) =>
 // 대기(pending) 동반자도 예약자와 동일하게 표시. 단, 확정 예약에 나중에 추가돼 승인 대기 중인
 // 동반자(예약자는 확정 상태)는 별개 건이므로 자기 status('접수') 그대로 표시.
 const companionDisplayStatus = (b: Booking, p: Person) =>
+  p.status === 'pending' && b.booker.status === 'confirmed' && p.batchId !== b.groupId
+    ? 'companion_add'
+    :
   p.status === 'pending' && (isReschedulePending(b) || isClinicProposed(b))
     ? bookerDisplayStatus(b)
     : p.status
@@ -493,12 +518,11 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
 function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: string }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
-  const [items, setItems] = useState<Booking[]>([])           // keyset로 누적된 예약 목록
+  const [items, setItems] = useState<Booking[]>([])
   const [counts, setCounts] = useState<Record<string, number> | null>(null)  // 탭별 건수(서버)
-  const [tab, setTab] = useState<Tab>('action')
-  const [loading, setLoading] = useState(true)                // 첫 페이지 로딩
-  const [loadingMore, setLoadingMore] = useState(false)       // 다음 페이지 로딩
-  const [hasMore, setHasMore] = useState(false)
+  const [tab, setTab] = useState<TopTab>('action')
+  const [detailFilters, setDetailFilters] = useState<DetailStatus[]>(TOP_TABS[0].details)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)  // 거절 대상(메시지 모달)
   const [rejectMsg, setRejectMsg] = useState('')
@@ -510,54 +534,57 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
   const [to, setTo] = useState(thisMonthRange()[1])       // 날짜 범위 종료 (기본=이번 달 말일)
   const [fromTime, setFromTime] = useState(''); const [toTime, setToTime] = useState('')  // 예약 시간 범위
   const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(30)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [sortKey, setSortKey] = useState<SortKey>('createdAt')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [dayDrawer, setDayDrawer] = useState<{ date: string; bookings: Booking[] } | null>(null)
   const [calMonth, setCalMonth] = useState(thisMonthRange()[0].slice(0, 7))   // 캘린더 표시 월(YYYY-MM)
   const [calBookings, setCalBookings] = useState<Booking[]>([])               // 그 달 예약(캘린더 전용)
 
-  const cursorRef = useRef<Cursor>(null)
   const reqRef = useRef(0)            // 최신 요청 식별 → 오래된 응답 무시
-  const moreLockRef = useRef(false)   // 다음 페이지 동시요청 잠금
-  const hasMoreRef = useRef(false)
-  const ioRef = useRef<IntersectionObserver | null>(null)
 
   // 병원 목록(드롭다운). 병원 관리자는 자기 병원만 반환됨.
   useEffect(() => { adminApi.getBranches().then(setBranches).catch(() => {}) }, [])
   // 이름 검색 디바운스(300ms)
   useEffect(() => { const t = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(t) }, [query])
 
-  const reqBody = () => ({ branchId: branchId || undefined, status: tab, q: debouncedQuery || undefined, dateField, from: from || undefined, to: to || undefined, fromTime: fromTime || undefined, toTime: toTime || undefined, limit: 30 })
+  const reqBody = () => ({
+    branchId: branchId || undefined,
+    status: tab,
+    statusFilters: detailFilters,
+    q: debouncedQuery || undefined,
+    dateField,
+    from: from || undefined,
+    to: to || undefined,
+    fromTime: fromTime || undefined,
+    toTime: toTime || undefined,
+    page,
+    pageSize,
+    sortKey,
+    sortDir,
+  })
 
   const fetchFirst = async (silent = false) => {
     const my = ++reqRef.current
     if (!silent) setLoading(true)
-    cursorRef.current = null; hasMoreRef.current = false
     try {
-      const page = await adminApi.getReservationsPage(reqBody())
+      const resPage = await adminApi.getReservationsPage(reqBody())
       if (my !== reqRef.current) return
-      setItems(page.items)
-      cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
-      if (page.counts) setCounts(page.counts)
-      setDrawerTarget(dt => dt ? (page.items.find(x => x.groupId === dt.groupId) ?? dt) : null)
+      setItems(resPage.items)
+      setTotal(resPage.total ?? resPage.items.length)
+      setTotalPages(resPage.totalPages ?? 1)
+      if (resPage.page && resPage.page !== page) setPage(resPage.page)
+      if (resPage.counts) setCounts(resPage.counts)
+      setDrawerTarget(dt => dt ? (resPage.items.find(x => x.groupId === dt.groupId) ?? dt) : null)
     } catch (e: any) { if (!silent && my === reqRef.current) alert(e?.message || '불러오기에 실패했습니다') }
     finally { if (!silent && my === reqRef.current) setLoading(false) }
   }
-  const fetchMore = async () => {
-    if (moreLockRef.current || !hasMoreRef.current || !cursorRef.current) return
-    moreLockRef.current = true; setLoadingMore(true)
-    const my = reqRef.current
-    try {
-      const page = await adminApi.getReservationsPage({ ...reqBody(), cursor: cursorRef.current })
-      if (my !== reqRef.current) return
-      setItems(prev => [...prev, ...page.items])
-      cursorRef.current = page.nextCursor; hasMoreRef.current = !!page.nextCursor; setHasMore(!!page.nextCursor)
-    } catch { /* 다음 페이지 실패는 조용히 — 재스크롤 시 재시도 */ }
-    finally { moreLockRef.current = false; setLoadingMore(false) }
-  }
-  const fetchMoreRef = useRef(fetchMore); fetchMoreRef.current = fetchMore
-
   // 필터(병원·탭·검색어·날짜·시간) 변경 시 첫 페이지 재조회 — 리스트 뷰일 때만
-  const filterKey = `${branchId}|${tab}|${debouncedQuery}|${dateField}|${from}|${to}|${fromTime}|${toTime}`
+  const filterKey = `${branchId}|${tab}|${detailFilters.join(',')}|${debouncedQuery}|${dateField}|${from}|${to}|${fromTime}|${toTime}|${page}|${pageSize}|${sortKey}|${sortDir}`
   useEffect(() => { if (viewMode === 'list') fetchFirst() }, [filterKey, viewMode])
 
   // 캘린더 뷰: 그 달 예약만 별도 조회
@@ -565,15 +592,6 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
     if (viewMode !== 'calendar') return
     adminApi.getReservationsMonth(calMonth, branchId || undefined).then(setCalBookings).catch(() => setCalBookings([]))
   }, [viewMode, calMonth, branchId])
-
-  // 무한 스크롤 센티넬: 노드가 마운트될 때 옵저버 연결
-  const sentinel = useCallback((node: HTMLDivElement | null) => {
-    if (ioRef.current) { ioRef.current.disconnect(); ioRef.current = null }
-    if (node) {
-      ioRef.current = new IntersectionObserver(es => { if (es[0].isIntersecting) fetchMoreRef.current() }, { rootMargin: '300px' })
-      ioRef.current.observe(node)
-    }
-  }, [])
 
   const refresh = (silent = false) => {
     if (viewMode === 'list') fetchFirst(silent)
@@ -626,6 +644,38 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
   }
 
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
+  const currentTop = TOP_TABS.find(t => t.key === tab) ?? TOP_TABS[0]
+  const setTopTab = (next: TopTab) => {
+    const found = TOP_TABS.find(t => t.key === next) ?? TOP_TABS[0]
+    setTab(found.key)
+    setDetailFilters(found.details)
+    setPage(1)
+  }
+  const toggleDetail = (key: DetailStatus) => {
+    setDetailFilters(prev => {
+      const allowed = currentTop.details
+      const next = prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]
+      const cleaned = next.filter(x => allowed.includes(x))
+      return cleaned.length ? cleaned : [key]
+    })
+    setPage(1)
+  }
+  const applyRange = (range: [string, string]) => { setFrom(range[0]); setTo(range[1]); setPage(1) }
+  const activeQuick = (() => {
+    const same = (r: [string, string]) => from === r[0] && to === r[1]
+    if (same(todayRange())) return 'today'
+    if (same(thisWeekRange())) return 'week'
+    if (same(thisMonthRange())) return 'month'
+    return ''
+  })()
+  const changeSort = (key: SortKey) => {
+    setSortKey(prev => {
+      if (prev !== key) { setSortDir('desc'); return key }
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+      return prev
+    })
+    setPage(1)
+  }
 
   // 거절 대상(reservationId)이 어떤 케이스인지 → 거절 시 동작 설명
   const rejectInfo = (id: string | null): { title: string; desc: string } => {
@@ -664,26 +714,58 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
         <>
           {/* 검색: 날짜 범위 · 시간 범위 · 이름 */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-            <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} dateField={dateField} onDateField={setDateField} />
+            <div style={{ display: 'inline-flex', gap: 4, padding: 3, border: '1px solid #DDD', borderRadius: 9, background: '#fff' }}>
+              {[
+                ['today', '오늘', todayRange()],
+                ['week', '이번 주', thisWeekRange()],
+                ['month', '이번 달', thisMonthRange()],
+              ].map(([key, label, range]) => {
+                const active = activeQuick === key
+                return (
+                  <button key={key as string} onClick={() => applyRange(range as [string, string])} style={{
+                    height: 30, padding: '0 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    background: active ? '#111' : 'transparent', color: active ? '#fff' : '#555',
+                    fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+                  }}>{label as string}</button>
+                )
+              })}
+            </div>
+            <RangeCalendar from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); setPage(1) }} dateField={dateField} onDateField={(f) => { setDateField(f); setPage(1) }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="예약 시간 범위">
               <span style={{ fontSize: 14 }}>🕐</span>
-              <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)} style={tInput} />
+              <input type="time" value={fromTime} onChange={e => { setFromTime(e.target.value); setPage(1) }} style={tInput} />
               <span style={{ color: '#999' }}>~</span>
-              <input type="time" value={toTime} onChange={e => setToTime(e.target.value)} style={tInput} />
-              {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime('') }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
+              <input type="time" value={toTime} onChange={e => { setToTime(e.target.value); setPage(1) }} style={tInput} />
+              {(fromTime || toTime) && <button onClick={() => { setFromTime(''); setToTime(''); setPage(1) }} title="시간 초기화" style={{ height: 38, border: '1px solid #DDD', background: '#fff', borderRadius: 8, padding: '0 9px', cursor: 'pointer', color: '#888' }}>✕</button>}
             </div>
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
+            <input value={query} onChange={e => { setQuery(e.target.value); setPage(1) }} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
           </div>
-          {/* 상태 탭 — 건수는 서버 집계(현재 날짜·시간·이름 검색 반영). 정렬은 접수일 최신순 고정. */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-            {TABS.map(t => {
+          {/* 상태 탭 — 건수는 서버 집계(현재 날짜·시간·이름 검색 반영). */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {TOP_TABS.map(t => {
               const count = counts?.[t.key] ?? 0
               const active = tab === t.key
-              const c = TAB_COLOR[t.key]
+              const c = TOP_COLOR[t.key]
               const actionActive = t.key === 'action' && active
               return (
-                <button key={t.key} onClick={() => setTab(t.key)} style={{ padding: '8px 14px', borderRadius: 999, border: actionActive ? 'none' : `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }}>
+                <button key={t.key} onClick={() => setTopTab(t.key)} style={{ padding: '8px 14px', borderRadius: 999, border: actionActive ? 'none' : `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }}>
                   {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            {currentTop.details.map(k => {
+              const active = detailFilters.includes(k)
+              const count = counts?.[k] ?? 0
+              const c = STATUS_COLOR[k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k] ?? STATUS_COLOR.pending
+              return (
+                <button key={k} onClick={() => toggleDetail(k)} style={{
+                  padding: '6px 11px', borderRadius: 999, border: `1.5px solid ${active ? c.border : '#E5E7EB'}`,
+                  background: active ? c.bg : '#fff', color: active ? c.fg : '#555',
+                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                }}>
+                  {DETAIL_LABEL[k]} <span style={{ opacity: 0.72 }}>({count})</span>
                 </button>
               )
             })}
@@ -696,17 +778,20 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
             <>
               <div style={{ background: '#fff', border: '1px solid #EAEAEA', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', padding: '11px 16px', background: '#FAFBFC', borderBottom: '1px solid #E5E7EB' }}>
-                  {RES_HEADERS.map((h, i) => (
-                    <div key={i} style={{ ...headCell, textAlign: RES_ALIGN[i], color: '#888' }}>{h}</div>
+                  {RES_COLUMNS.map((col, i) => (
+                    <button key={col.key || i} disabled={!col.sortKey} onClick={() => col.sortKey && changeSort(col.sortKey)} style={{
+                      ...headCell, textAlign: RES_ALIGN[i], color: col.sortKey ? '#555' : '#888',
+                      border: 'none', background: 'transparent', padding: 0, cursor: col.sortKey ? 'pointer' : 'default',
+                    }}>
+                      {col.label}{col.sortKey && sortKey === col.sortKey && <span style={{ marginLeft: 3 }}>{sortDir === 'desc' ? '▼' : '▲'}</span>}
+                    </button>
                   ))}
                 </div>
                 <div>
                   {items.map((b, i) => <BookingRow key={b.groupId} b={b} last={i === items.length - 1} busy={busy} act={act} onPropose={() => setProposeTarget(b)} onOpen={() => setDrawerTarget(b)} />)}
                 </div>
               </div>
-              <div ref={sentinel} style={{ height: 1 }} />
-              {loadingMore && <p style={{ textAlign: 'center', color: '#999', fontSize: 13, padding: '14px 0' }}>더 불러오는 중…</p>}
-              {!hasMore && !loadingMore && <p style={{ textAlign: 'center', color: '#CCC', fontSize: 12, padding: '12px 0' }}>마지막입니다</p>}
+              <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1) }} />
             </>
           )}
         </>
@@ -739,10 +824,21 @@ const genderKo = (g?: string | null) => (g === 'male' ? '남성' : g === 'female
 const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight: 4 }
 
 // 예약 "표처럼 보이는 카드" 레이아웃 — 헤더와 카드가 같은 그리드 컬럼을 공유. 마지막은 액션 열.
-const RES_HEADERS = ['예약 일시', '병원', '예약자', '생년월일', '성별', '구분', '희망 시술', '상태', '접수일자', '']
-const RES_GRID = '130px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 96px 96px 200px'
+const RES_COLUMNS: { key: string; label: string; sortKey?: SortKey }[] = [
+  { key: 'createdAt', label: '접수일자', sortKey: 'createdAt' },
+  { key: 'dateTime', label: '예약 일시', sortKey: 'dateTime' },
+  { key: 'branch', label: '병원', sortKey: 'branchName' },
+  { key: 'booker', label: '예약자', sortKey: 'bookerName' },
+  { key: 'birth', label: '생년월일', sortKey: 'birthDate' },
+  { key: 'gender', label: '성별', sortKey: 'gender' },
+  { key: 'visit', label: '구분', sortKey: 'visitType' },
+  { key: 'treatment', label: '희망 시술', sortKey: 'treatment' },
+  { key: 'status', label: '상태', sortKey: 'status' },
+  { key: 'actions', label: '' },
+]
+const RES_GRID = '96px 142px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 104px 200px'
 // 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
-const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center', 'center']
+const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center']
 const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 const cellBase: React.CSSProperties = { fontSize: 13, color: '#333', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
@@ -778,6 +874,7 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
             <span style={{ fontSize: 11, color: '#777', background: '#EEE', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>{label}</span>
             <b style={{ fontSize: 14, color: '#111' }}>{p.nameKo || p.name}</b>
             {p.nameKo && p.name && <span style={{ color: '#aaa', fontSize: 12, marginLeft: 5 }}>{p.name}</span>}
+            <span style={{ ...visitPill, marginLeft: 8 }}>{visitKo(p.visitType)}</span>
           </span>
           <span style={{ fontSize: 12.5, color: '#666' }}>
             <span style={kStyle}>생년월일</span>{p.birthDate || '-'}
@@ -787,10 +884,9 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
         {showStatus && <StatusBadge status={st} />}
       </div>
 
-      {/* 2줄: 초진/재진(동그라미) + 희망시술  +  더보기(오른쪽 끝, expanded면 숨김) */}
+      {/* 2줄: 희망시술 + 더보기(오른쪽 끝, expanded면 숨김) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-          <span style={visitPill}>{visitKo(p.visitType)}</span>
           <span style={{ fontSize: 13, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: expanded ? 'normal' : 'nowrap' }}>
             <span style={kStyle}>희망시술</span>{p.treatmentRequest || '-'}
           </span>
@@ -800,7 +896,7 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
 
       {/* 희망예산 · 시술이력 (expanded면 항상, 아니면 더보기 시) */}
       {open && (
-        <div style={{ borderTop: '1px dashed #EEE', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ fontSize: 13, color: '#333' }}><span style={kStyle}>희망예산</span>{p.budget || '-'}</div>
           <div style={{ fontSize: 13, color: '#333' }}><span style={kStyle}>시술이력</span>{p.surgeryHistory || '-'}</div>
         </div>
@@ -816,13 +912,12 @@ function StatusBadge({ status }: { status: string }) {
 
 // 예약 한 건 = 카드 한 줄(예약자) + 동반자 줄. 동반자가 있으면 한 그룹(연녹색)으로 묶어 표시. 행 클릭 → 상세 드로어.
 function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; last?: boolean; busy: string | null; act: (k: 'confirm' | 'reject', id: string) => void; onPropose: () => void; onOpen: () => void }) {
-  const compBatches = pendingCompanionBatches(b)
   const disabled = busy === b.booker.id
   const cell = (v: React.ReactNode, extra?: React.CSSProperties) => <div style={{ ...cellBase, ...extra }}>{v}</div>
   const sbtn: React.CSSProperties = { padding: '5px 9px', borderRadius: 7, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn() }
 
-  const actionCol = () => {
+  const bookerActionCol = () => {
     if (isReschedulePending(b) || isNewPending(b)) return (
       <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button disabled={disabled} onClick={stop(() => act?.('confirm', b.booker.id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>확정</button>
@@ -835,23 +930,26 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
         <button disabled={disabled} onClick={stop(() => act?.('reject', b.booker.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>제안 취소</button>
       </div>
     )
-    if (b.booker.status === 'confirmed' && compBatches.length) return (
+    return null
+  }
+  const companionActionCol = (p: Person) => {
+    if (!(b.booker.status === 'confirmed' && p.status === 'pending' && p.batchId !== b.groupId)) return null
+    return (
       <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act?.('confirm', compBatches[0][0].id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>동반 확정</button>
-        <button disabled={busy === compBatches[0][0].id} onClick={stop(() => act?.('reject', compBatches[0][0].id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
+        <button disabled={busy === p.id} onClick={stop(() => act?.('confirm', p.id))} style={{ ...sbtn, border: 'none', background: '#1D9E75', color: '#fff', cursor: 'pointer' }}>확정</button>
+        <button disabled={busy === p.id} onClick={stop(() => act?.('reject', p.id))} style={{ ...sbtn, border: '1px solid #E53E3E', background: '#fff', color: '#E53E3E', cursor: 'pointer' }}>거절</button>
       </div>
     )
-    return null
   }
 
   const personRow = (p: Person, isComp: boolean) => (
     <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#F4FAF7', borderTop: '1px dashed #CDE9DC' } : {}) }}>
+      {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
       {cell(isComp
         ? ''
         : <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
             <b>{dot(b.date)} {b.time}</b>
-            {isReschedulePending(b) && <span style={{ fontSize: 10.5, color: '#1E40AF', fontWeight: 700 }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</span>}
-            {isClinicProposed(b) && <span style={{ fontSize: 10.5, color: '#9A3412', fontWeight: 700 }}>🕒 {(b.proposedTimes || []).join(', ')}</span>}
+            {isReschedulePending(b) && <b style={{ color: '#1E40AF' }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</b>}
           </div>, { textAlign: 'center', whiteSpace: 'normal' })}
       {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center', whiteSpace: 'normal' })}
       {cell(
@@ -865,8 +963,7 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
       {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
       {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
-      {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
-      {cell(isComp ? '' : actionCol(), { overflow: 'visible' })}
+      {cell(isComp ? companionActionCol(p) : bookerActionCol(), { overflow: 'visible' })}
     </div>
   )
 
@@ -936,16 +1033,22 @@ function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, read
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid #EEE' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{b.branchName}</div>
-            <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>{dot(b.date)} {b.time}</div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{ display: 'block', fontSize: 11.5, color: '#999', fontWeight: 700, marginBottom: 2 }}>예약 일시</span>
+              <span style={{ fontSize: 20, color: '#111', fontWeight: 800 }}>{dot(b.date)} {b.time}</span>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <StatusBadge status={bookerDisplayStatus(b)} />
-            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#888', cursor: 'pointer' }}>×</button>
-          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#888', cursor: 'pointer' }}>×</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px 20px' }}>
-          {isReschedulePending(b) && <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#1E40AF', marginBottom: 8 }}>🔁 일시변경 요청 → {dot(b.requestedDate)} {b.requestedTime}</div>}
-          {isClinicProposed(b) && <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#9A3412', marginBottom: 8 }}>🕒 시간 제안 후 고객 응답 대기 → {dot(b.requestedDate)} ({(b.proposedTimes || []).join(', ')})</div>}
+          {isReschedulePending(b) && <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#1E40AF', marginBottom: 8 }}>
+            <div>🔁 일시변경 요청</div>
+            <div style={{ marginTop: 4 }}>→ {dot(b.requestedDate)} {b.requestedTime}</div>
+          </div>}
+          {isClinicProposed(b) && <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#9A3412', marginBottom: 8 }}>
+            <div>🕒 시간 제안 후 고객 응답 대기</div>
+            <div style={{ marginTop: 4 }}>→ {dot(b.requestedDate)} ({(b.proposedTimes || []).join(', ')})</div>
+          </div>}
           {b.memo && <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: '#92400E', marginBottom: 3 }}>📝 고객 메모</div>
             <div style={{ fontSize: 13, color: '#444', whiteSpace: 'pre-wrap' }}>{b.memo}</div>
@@ -975,6 +1078,43 @@ function ReservationDrawer({ booking, busy = null, act, onPropose, onClose, read
           </div>
         )}
       </aside>
+    </div>
+  )
+}
+
+function Pagination({ page, totalPages, total, pageSize, onPage, onPageSize }: {
+  page: number; totalPages: number; total: number; pageSize: number
+  onPage: (p: number) => void; onPageSize: (n: number) => void
+}) {
+  const safeTotal = Math.max(1, totalPages || 1)
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const end = Math.min(total, page * pageSize)
+  const pages = Array.from({ length: safeTotal }, (_, i) => i + 1)
+    .filter(p => p === 1 || p === safeTotal || Math.abs(p - page) <= 2)
+  const compact: Array<number | 'dots'> = []
+  pages.forEach((p, i) => {
+    if (i > 0 && p - (pages[i - 1] as number) > 1) compact.push('dots')
+    compact.push(p)
+  })
+  const btn = (disabled = false): React.CSSProperties => ({
+    minWidth: 34, height: 34, borderRadius: 8, border: '1px solid #DDD',
+    background: '#fff', color: disabled ? '#BBB' : '#333', fontSize: 13, fontWeight: 700,
+    cursor: disabled ? 'default' : 'pointer',
+  })
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', padding: '14px 2px 0' }}>
+      <div style={{ fontSize: 12.5, color: '#888' }}>{total ? `${start}-${end} / 총 ${total}건` : '총 0건'}</div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select value={pageSize} onChange={e => onPageSize(Number(e.target.value))} style={{ height: 34, borderRadius: 8, border: '1px solid #DDD', padding: '0 8px', fontSize: 13 }}>
+          {[15, 30, 50, 100].map(n => <option key={n} value={n}>{n}개</option>)}
+        </select>
+        <button disabled={page <= 1} onClick={() => onPage(Math.max(1, page - 1))} style={btn(page <= 1)}>‹</button>
+        {compact.map((p, i) => p === 'dots'
+          ? <span key={`d${i}`} style={{ color: '#AAA', padding: '0 2px' }}>…</span>
+          : <button key={p} onClick={() => onPage(p)} style={{ ...btn(false), borderColor: p === page ? '#1D9E75' : '#DDD', background: p === page ? '#1D9E75' : '#fff', color: p === page ? '#fff' : '#333' }}>{p}</button>
+        )}
+        <button disabled={page >= safeTotal} onClick={() => onPage(Math.min(safeTotal, page + 1))} style={btn(page >= safeTotal)}>›</button>
+      </div>
     </div>
   )
 }
