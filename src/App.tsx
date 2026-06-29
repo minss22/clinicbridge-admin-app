@@ -295,15 +295,16 @@ function Login() {
 }
 
 // ── 대시보드 ──────────────────────────────────────────────────
-type TopTab = 'action' | 'waiting' | 'confirmed' | 'closed' | 'all'
+type TopTab = 'action' | 'proposed' | 'confirmed' | 'rejected' | 'cancelled' | 'all'
 type DetailStatus = 'new' | 'companion_add' | 'reschedule' | 'proposed' | 'confirmed' | 'rejected' | 'cancelled' | 'completed'
 type SortKey = 'createdAt' | 'dateTime' | 'branchName' | 'bookerName' | 'birthDate' | 'gender' | 'visitType' | 'treatment' | 'status'
 type SortDir = 'asc' | 'desc'
 const TOP_TABS: { key: TopTab; label: string; details: DetailStatus[] }[] = [
   { key: 'action', label: '처리 필요', details: ['new', 'companion_add', 'reschedule'] },
-  { key: 'waiting', label: '고객 응답 대기', details: ['proposed'] },
+  { key: 'proposed', label: '시간 조정 중', details: ['proposed'] },
   { key: 'confirmed', label: '확정', details: ['confirmed'] },
-  { key: 'closed', label: '종료', details: ['rejected', 'cancelled'] },
+  { key: 'rejected', label: '거절', details: ['rejected'] },
+  { key: 'cancelled', label: '취소', details: ['cancelled'] },
   { key: 'all', label: '전체', details: ['new', 'companion_add', 'reschedule', 'proposed', 'confirmed', 'rejected', 'cancelled', 'completed'] },
 ]
 const DETAIL_LABEL: Record<DetailStatus, string> = {
@@ -830,7 +831,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
             {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
           </select>
         )}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {tab === 'action' && <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {currentTop.details.map(k => {
             const statusKey = k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k
             const c = STATUS_COLOR[statusKey] ?? STATUS_COLOR.pending
@@ -840,7 +841,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
               </span>
             )
           })}
-        </div>
+        </div>}
         {loading ? (
           <Center small>불러오는 중…</Center>
         ) : items.length === 0 ? (
@@ -894,7 +895,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
       ) : (
         <>
           {/* 검색: 날짜 범위 · 시간 범위 · 이름 */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, padding: 10, border: '1px solid #E5E7EB', borderRadius: 12, background: '#fff' }}>
             <div style={{ display: 'inline-flex', gap: 4, padding: 3, border: '1px solid #DDD', borderRadius: 9, background: '#fff' }}>
               {[
                 ['today', '오늘', todayRange()],
@@ -947,7 +948,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
               )
             })}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 0 10px', marginBottom: 2 }}>
+          {tab === 'action' && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 0 10px', marginBottom: 2 }}>
             {currentTop.details.map(k => {
               const active = detailFilters.includes(k)
               const count = counts?.[k] ?? 0
@@ -968,7 +969,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                 </button>
               )
             })}
-          </div>
+          </div>}
           {loading ? (
             <Center small>불러오는 중…</Center>
           ) : items.length === 0 ? (
