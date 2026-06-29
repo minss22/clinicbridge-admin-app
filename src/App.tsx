@@ -10,6 +10,18 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
+let deferredInstallPrompt: BeforeInstallPromptEvent | null = null
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e: Event) => {
+    e.preventDefault()
+    deferredInstallPrompt = e as BeforeInstallPromptEvent
+    window.dispatchEvent(new Event('admin-app-install-ready'))
+  })
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null
+  })
+}
+
 const STATUS_KO: Record<string, string> = {
   pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료',
   reschedule_req: '일시변경 요청', rescheduling: '시간 조정 중', companion_add: '동반자 추가 접수',
@@ -155,44 +167,42 @@ function AdminShell({ session, openId }: { session: Session | null; openId?: str
 
 // 사이드바 앱 설치 버튼 — PWA 설치 프롬프트를 사용
 function InstallAppButton() {
-  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null)
+  const [promptReady, setPromptReady] = useState(() => !!deferredInstallPrompt)
   const [installed, setInstalled] = useState(false)
 
   useEffect(() => {
     const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (window.navigator as any).standalone === true
     if (standalone) setInstalled(true)
 
-    const onBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault()
-      setPromptEvent(e as BeforeInstallPromptEvent)
-    }
+    const onInstallReady = () => setPromptReady(!!deferredInstallPrompt)
     const onInstalled = () => {
       setInstalled(true)
-      setPromptEvent(null)
+      setPromptReady(false)
     }
 
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('admin-app-install-ready', onInstallReady)
     window.addEventListener('appinstalled', onInstalled)
     return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+      window.removeEventListener('admin-app-install-ready', onInstallReady)
       window.removeEventListener('appinstalled', onInstalled)
     }
   }, [])
 
   const onClick = async () => {
     if (installed) return
-    if (!promptEvent) {
+    if (!deferredInstallPrompt) {
       alert('현재 브라우저에서는 자동 설치 창을 바로 열 수 없습니다. 주소창 또는 브라우저 메뉴의 "앱 설치"를 사용해 주세요.')
       return
     }
-    await promptEvent.prompt()
-    const choice = await promptEvent.userChoice
+    await deferredInstallPrompt.prompt()
+    const choice = await deferredInstallPrompt.userChoice
     if (choice.outcome === 'accepted') setInstalled(true)
-    setPromptEvent(null)
+    deferredInstallPrompt = null
+    setPromptReady(false)
   }
 
   return (
-    <button onClick={onClick} disabled={installed} title={installed ? '이미 앱으로 설치되어 있습니다' : promptEvent ? '관리자 앱을 설치합니다' : '설치 조건이 준비되면 브라우저 설치 창이 열립니다'}
+    <button onClick={onClick} disabled={installed} title={installed ? '이미 앱으로 설치되어 있습니다' : promptReady ? '관리자 앱을 설치합니다' : '설치 조건이 준비되면 브라우저 설치 창이 열립니다'}
       style={{
         width: '100%', marginBottom: 8, padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, boxSizing: 'border-box',
         cursor: installed ? 'default' : 'pointer',
