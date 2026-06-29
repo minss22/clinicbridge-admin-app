@@ -535,7 +535,7 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
   const [fromTime, setFromTime] = useState(''); const [toTime, setToTime] = useState('')  // 예약 시간 범위
   const [dateField, setDateField] = useState<'created' | 'reserved'>('created')  // 접수일/예약일 중 무엇으로 검색 (기본=접수일)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(30)
+  const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
@@ -1106,7 +1106,7 @@ function Pagination({ page, totalPages, total, pageSize, onPage, onPageSize }: {
       <div style={{ fontSize: 12.5, color: '#888' }}>{total ? `${start}-${end} / 총 ${total}건` : '총 0건'}</div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <select value={pageSize} onChange={e => onPageSize(Number(e.target.value))} style={{ height: 34, borderRadius: 8, border: '1px solid #DDD', padding: '0 8px', fontSize: 13 }}>
-          {[15, 30, 50, 100].map(n => <option key={n} value={n}>{n}개</option>)}
+          {[10, 30, 50, 100].map(n => <option key={n} value={n}>{n}개</option>)}
         </select>
         <button disabled={page <= 1} onClick={() => onPage(Math.max(1, page - 1))} style={btn(page <= 1)}>‹</button>
         {compact.map((p, i) => p === 'dots'
