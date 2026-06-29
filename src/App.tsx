@@ -179,9 +179,8 @@ function InstallAppButton() {
     }
   }, [])
 
-  if (installed) return null
-
   const onClick = async () => {
+    if (installed) return
     if (!promptEvent) {
       alert('현재 브라우저에서는 자동 설치 창을 바로 열 수 없습니다. 주소창 또는 브라우저 메뉴의 "앱 설치"를 사용해 주세요.')
       return
@@ -193,14 +192,14 @@ function InstallAppButton() {
   }
 
   return (
-    <button onClick={onClick} title={promptEvent ? '관리자 앱을 설치합니다' : '설치 조건이 준비되면 브라우저 설치 창이 열립니다'}
+    <button onClick={onClick} disabled={installed} title={installed ? '이미 앱으로 설치되어 있습니다' : promptEvent ? '관리자 앱을 설치합니다' : '설치 조건이 준비되면 브라우저 설치 창이 열립니다'}
       style={{
         width: '100%', marginBottom: 8, padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, boxSizing: 'border-box',
-        cursor: 'pointer',
-        border: '1px solid #1D9E75',
-        background: '#fff',
-        color: '#1D9E75',
-      }}>앱 설치하기</button>
+        cursor: installed ? 'default' : 'pointer',
+        border: `1px solid ${installed ? '#E5E7EB' : '#1D9E75'}`,
+        background: installed ? '#F9FAFB' : '#fff',
+        color: installed ? '#999' : '#1D9E75',
+      }}>{installed ? '앱 설치됨' : '앱 설치하기'}</button>
   )
 }
 
