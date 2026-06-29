@@ -689,7 +689,17 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
     if (kind === 'reject') { setRejectTarget(reservationId); setRejectMsg(''); return }  // 거절은 메시지 모달로
     if (!confirm('확정하시겠습니까? (고객에게 알림이 갑니다)')) return
     setBusy(reservationId)
-    try { await adminApi.confirm(reservationId); await fetchFirst() }
+    try {
+      const res: any = await adminApi.confirm(reservationId)
+      if (res?.notification?.ok === false) {
+        const reason = res.notification.reason === 'missing_line_user_id' ? '예약에 고객 LINE ID가 없습니다.'
+          : res.notification.reason === 'missing_channel_access_token' ? 'LINE 채널 액세스 토큰이 설정되어 있지 않습니다.'
+          : res.notification.reason === 'line_api_error' ? `LINE API 오류가 발생했습니다.${res.notification.status ? ` (${res.notification.status})` : ''}`
+          : 'LINE 알림 발송에 실패했습니다.'
+        alert(`예약은 확정됐지만 고객 알림은 발송되지 않았습니다.\n\n원인: ${reason}`)
+      }
+      await fetchFirst()
+    }
     catch (e: any) { alert(e?.message || '처리에 실패했습니다') }
     finally { setBusy(null) }
   }
@@ -703,8 +713,6 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
 
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
   const currentTop = TOP_TABS.find(t => t.key === tab) ?? TOP_TABS[0]
-  const detailAllActive = currentTop.details.every(k => detailFilters.includes(k))
-  const detailTotal = currentTop.details.reduce((sum, k) => sum + (counts?.[k] ?? 0), 0)
   const setTopTab = (next: TopTab) => {
     const found = TOP_TABS.find(t => t.key === next) ?? TOP_TABS[0]
     setTab(found.key)
@@ -718,10 +726,6 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
       const cleaned = next.filter(x => allowed.includes(x))
       return cleaned.length ? cleaned : [key]
     })
-    setPage(1)
-  }
-  const selectAllDetails = () => {
-    setDetailFilters(currentTop.details)
     setPage(1)
   }
   const applyRange = (range: [string, string]) => { setFrom(range[0]); setTo(range[1]); setPage(1) }
@@ -830,31 +834,24 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
               )
             })}
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '14px 0 12px', marginBottom: 2 }}>
-            <button onClick={selectAllDetails} style={{
-              height: 32,
-              padding: '0 14px',
-              borderRadius: 7,
-              border: `1.5px solid ${detailAllActive ? '#1D9E75' : '#D1D5DB'}`,
-              background: detailAllActive ? '#F0FDF4' : '#fff',
-              color: detailAllActive ? '#047857' : '#555',
-              fontSize: 12.5,
-              fontWeight: 800,
-              cursor: 'pointer',
-            }}>
-              전체 <span style={{ marginLeft: 8 }}>{detailTotal}</span>
-            </button>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 0 10px', marginBottom: 2 }}>
             {currentTop.details.map(k => {
               const active = detailFilters.includes(k)
               const count = counts?.[k] ?? 0
               const c = STATUS_COLOR[k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k] ?? STATUS_COLOR.pending
               return (
                 <button key={k} onClick={() => toggleDetail(k)} style={{
-                  height: 32, padding: '0 14px', borderRadius: 7, border: `1.5px solid ${active ? c.border : '#E5E7EB'}`,
+                  height: 26, padding: '0 8px 0 10px', borderRadius: 999, border: `1px solid ${active ? c.border : '#E5E7EB'}`,
                   background: active ? c.bg : '#fff', color: active ? c.fg : '#555',
-                  fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}>
-                  {DETAIL_LABEL[k]} <span style={{ marginLeft: 8, opacity: 0.8 }}>{count}</span>
+                  {DETAIL_LABEL[k]}
+                  <span style={{
+                    minWidth: 18, height: 18, padding: '0 4px', borderRadius: 999, boxSizing: 'border-box',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    background: active ? '#fff' : '#F3F4F6', color: active ? c.fg : '#777',
+                    fontSize: 10.5, fontWeight: 900, lineHeight: 1,
+                  }}>{count}</span>
                 </button>
               )
             })}
@@ -927,7 +924,7 @@ const RES_COLUMNS: { key: string; label: string; sortKey?: SortKey }[] = [
 ]
 const RES_GRID = '96px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 104px 142px 200px'
 // 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
-const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center']
+const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center', 'center']
 const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 const cellBase: React.CSSProperties = { fontSize: 13, color: '#333', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 const confirmBtn: React.CSSProperties = { padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1D9E75', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
