@@ -1102,7 +1102,7 @@ function Pagination({ page, totalPages, total, pageSize, onPage, onPageSize }: {
     cursor: disabled ? 'default' : 'pointer',
   })
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', padding: '14px 2px 0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '14px 2px 0' }}>
       <div style={{ fontSize: 12.5, color: '#888' }}>{total ? `${start}-${end} / 총 ${total}건` : '총 0건'}</div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <select value={pageSize} onChange={e => onPageSize(Number(e.target.value))} style={{ height: 34, borderRadius: 8, border: '1px solid #DDD', padding: '0 8px', fontSize: 13 }}>
