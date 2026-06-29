@@ -232,14 +232,6 @@ const DETAIL_LABEL: Record<DetailStatus, string> = {
   cancelled: '취소',
   completed: '완료',
 }
-const TOP_COLOR: Record<TopTab, { bg: string; fg: string }> = {
-  action: { bg: '#EAB308', fg: '#fff' },
-  waiting: { bg: '#F97316', fg: '#fff' },
-  confirmed: STATUS_COLOR.confirmed,
-  closed: { bg: '#6B7280', fg: '#fff' },
-  all: { bg: '#1D9E75', fg: '#fff' },
-}
-
 function pendingCompanionBatches(b: Booking): Person[][] {
   const map: Record<string, Person[]> = {}
   for (const c of b.companions) {
@@ -645,6 +637,8 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
 
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
   const currentTop = TOP_TABS.find(t => t.key === tab) ?? TOP_TABS[0]
+  const detailAllActive = currentTop.details.every(k => detailFilters.includes(k))
+  const detailTotal = currentTop.details.reduce((sum, k) => sum + (counts?.[k] ?? 0), 0)
   const setTopTab = (next: TopTab) => {
     const found = TOP_TABS.find(t => t.key === next) ?? TOP_TABS[0]
     setTab(found.key)
@@ -658,6 +652,10 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
       const cleaned = next.filter(x => allowed.includes(x))
       return cleaned.length ? cleaned : [key]
     })
+    setPage(1)
+  }
+  const selectAllDetails = () => {
+    setDetailFilters(currentTop.details)
     setPage(1)
   }
   const applyRange = (range: [string, string]) => { setFrom(range[0]); setTo(range[1]); setPage(1) }
@@ -741,31 +739,56 @@ function ReservationsView({ isBranch, openId }: { isBranch?: boolean; openId?: s
             <input value={query} onChange={e => { setQuery(e.target.value); setPage(1) }} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
           </div>
           {/* 상태 탭 — 건수는 서버 집계(현재 날짜·시간·이름 검색 반영). */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-            {TOP_TABS.map(t => {
+          <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', margin: '8px -18px 0', padding: '0 18px', borderBottom: '1px solid #E5E7EB' }}>
+            {TOP_TABS.map((t, i) => {
               const count = counts?.[t.key] ?? 0
               const active = tab === t.key
-              const c = TOP_COLOR[t.key]
-              const actionActive = t.key === 'action' && active
               return (
-                <button key={t.key} onClick={() => setTopTab(t.key)} style={{ padding: '8px 14px', borderRadius: 999, border: actionActive ? 'none' : `1.5px solid ${active ? c.fg : '#E5E7EB'}`, background: active ? c.bg : 'transparent', color: active ? c.fg : '#333', fontSize: 13, fontWeight: active ? 700 : 600, cursor: 'pointer' }}>
+                <button key={t.key} onClick={() => setTopTab(t.key)} style={{
+                  height: 46,
+                  minWidth: 128,
+                  padding: '0 22px',
+                  border: '1px solid #E5E7EB',
+                  borderBottom: active ? '1px solid #008C6A' : 'none',
+                  borderRadius: '10px 10px 0 0',
+                  marginLeft: i === 0 ? 0 : -1,
+                  background: active ? '#008C6A' : '#fff',
+                  color: active ? '#fff' : '#333',
+                  fontSize: 14,
+                  fontWeight: active ? 800 : 700,
+                  cursor: 'pointer',
+                  boxShadow: active ? '0 -1px 0 rgba(0,0,0,0.02)' : 'none',
+                }}>
                   {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
                 </button>
               )
             })}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '14px 0 12px', marginBottom: 2 }}>
+            <button onClick={selectAllDetails} style={{
+              height: 32,
+              padding: '0 14px',
+              borderRadius: 7,
+              border: `1.5px solid ${detailAllActive ? '#1D9E75' : '#D1D5DB'}`,
+              background: detailAllActive ? '#F0FDF4' : '#fff',
+              color: detailAllActive ? '#047857' : '#555',
+              fontSize: 12.5,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}>
+              전체 <span style={{ marginLeft: 8 }}>{detailTotal}</span>
+            </button>
             {currentTop.details.map(k => {
               const active = detailFilters.includes(k)
               const count = counts?.[k] ?? 0
               const c = STATUS_COLOR[k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k] ?? STATUS_COLOR.pending
               return (
                 <button key={k} onClick={() => toggleDetail(k)} style={{
-                  padding: '6px 11px', borderRadius: 999, border: `1.5px solid ${active ? c.border : '#E5E7EB'}`,
+                  height: 32, padding: '0 14px', borderRadius: 7, border: `1.5px solid ${active ? c.border : '#E5E7EB'}`,
                   background: active ? c.bg : '#fff', color: active ? c.fg : '#555',
-                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
                 }}>
-                  {DETAIL_LABEL[k]} <span style={{ opacity: 0.72 }}>({count})</span>
+                  {DETAIL_LABEL[k]} <span style={{ marginLeft: 8, opacity: 0.8 }}>{count}</span>
                 </button>
               )
             })}
@@ -826,7 +849,6 @@ const kStyle: React.CSSProperties = { color: '#999', fontSize: 11.5, marginRight
 // 예약 "표처럼 보이는 카드" 레이아웃 — 헤더와 카드가 같은 그리드 컬럼을 공유. 마지막은 액션 열.
 const RES_COLUMNS: { key: string; label: string; sortKey?: SortKey }[] = [
   { key: 'createdAt', label: '접수일자', sortKey: 'createdAt' },
-  { key: 'dateTime', label: '예약 일시', sortKey: 'dateTime' },
   { key: 'branch', label: '병원', sortKey: 'branchName' },
   { key: 'booker', label: '예약자', sortKey: 'bookerName' },
   { key: 'birth', label: '생년월일', sortKey: 'birthDate' },
@@ -834,9 +856,10 @@ const RES_COLUMNS: { key: string; label: string; sortKey?: SortKey }[] = [
   { key: 'visit', label: '구분', sortKey: 'visitType' },
   { key: 'treatment', label: '희망 시술', sortKey: 'treatment' },
   { key: 'status', label: '상태', sortKey: 'status' },
+  { key: 'dateTime', label: '예약 일시', sortKey: 'dateTime' },
   { key: 'actions', label: '' },
 ]
-const RES_GRID = '96px 142px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 104px 200px'
+const RES_GRID = '96px 90px minmax(100px,1.2fr) 104px 52px 60px minmax(120px,1.4fr) 104px 142px 200px'
 // 자유 텍스트(희망시술)만 좌측, 나머지는 중앙 정렬
 const RES_ALIGN: Array<React.CSSProperties['textAlign']> = ['center', 'center', 'center', 'center', 'center', 'center', 'center', 'left', 'center', 'center']
 const headCell: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
@@ -945,12 +968,6 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
   const personRow = (p: Person, isComp: boolean) => (
     <div key={p.id} style={{ display: 'grid', gridTemplateColumns: RES_GRID, gap: '0 12px', alignItems: 'center', padding: '12px 16px', ...(isComp ? { background: '#F4FAF7', borderTop: '1px dashed #CDE9DC' } : {}) }}>
       {cell(isComp ? '' : dot((b.createdAt || '').slice(0, 10)), { color: '#888', textAlign: 'center' })}
-      {cell(isComp
-        ? ''
-        : <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
-            <b>{dot(b.date)} {b.time}</b>
-            {isReschedulePending(b) && <b style={{ color: '#1E40AF' }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</b>}
-          </div>, { textAlign: 'center', whiteSpace: 'normal' })}
       {cell(isComp ? '' : b.branchName, { color: '#555', textAlign: 'center', whiteSpace: 'normal' })}
       {cell(
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
@@ -963,6 +980,12 @@ function BookingRow({ b, last, busy, act, onPropose, onOpen }: { b: Booking; las
       {cell(<VisitPill v={p.visitType} />, { overflow: 'visible', textAlign: 'center' })}
       {cell(p.treatmentRequest || '-', { whiteSpace: 'normal' })}
       {cell(<StatusBadge status={isComp ? companionDisplayStatus(b, p) : bookerDisplayStatus(b)} />, { overflow: 'visible', textAlign: 'center' })}
+      {cell(isComp
+        ? ''
+        : <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
+            <b>{dot(b.date)} {b.time}</b>
+            {isReschedulePending(b) && <b style={{ color: '#1E40AF' }}>🔁 {dot(b.requestedDate)} {b.requestedTime}</b>}
+          </div>, { textAlign: 'center', whiteSpace: 'normal' })}
       {cell(isComp ? companionActionCol(p) : bookerActionCol(), { overflow: 'visible' })}
     </div>
   )
