@@ -807,7 +807,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                       fontSize: 14, fontWeight: 800, cursor: 'pointer',
                     }}>
                       <span>{t.label}</span>
-                      <span style={{ minWidth: 24, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 7px', boxSizing: 'border-box', background: active ? 'rgba(255,255,255,0.18)' : '#F3F4F6', color: active ? '#fff' : '#777', fontSize: 12 }}>{count}</span>
+                      <CountBubble count={count} active={active} />
                     </button>
                   )
                 })}
@@ -923,7 +923,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
             <input value={query} onChange={e => { setQuery(e.target.value); setPage(1) }} placeholder="이름 검색 (LINE·로마자·한국식)" style={{ flex: '1 1 180px', minWidth: 150, height: 38, boxSizing: 'border-box', padding: '0 12px', borderRadius: 8, border: '1px solid #DDD', fontSize: 14 }} />
           </div>
           {/* 상태 탭 — 건수는 서버 집계(현재 날짜·시간·이름 검색 반영). */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', margin: '8px -18px 0', padding: '0 18px', borderBottom: '1px solid #E5E7EB' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', margin: `8px -18px ${tab === 'action' ? 0 : 16}px`, padding: '0 18px', borderBottom: '1px solid #E5E7EB' }}>
             {TOP_TABS.map((t, i) => {
               const count = counts?.[t.key] ?? 0
               const active = tab === t.key
@@ -943,7 +943,10 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                   cursor: 'pointer',
                   boxShadow: active ? '0 -1px 0 rgba(0,0,0,0.02)' : 'none',
                 }}>
-                  {t.label} {count > 0 && <span style={{ opacity: 0.75 }}>({count})</span>}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    {t.label}
+                    <CountBubble count={count} active={active} />
+                  </span>
                 </button>
               )
             })}
@@ -1056,7 +1059,6 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
   const [more, setMore] = useState(false)
   const open = expanded || more   // expanded=항상 전체 정보 표시(더보기 없음)
   const st = displayStatus ?? p.status
-  const sc = STATUS_COLOR[st] ?? STATUS_COLOR.pending
   const moreBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#1D9E75', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, flexShrink: 0, whiteSpace: 'nowrap' }
   const isFirst = p.visitType === 'first'
   const visitPill: React.CSSProperties = {
@@ -1066,7 +1068,7 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
       : { color: '#9333EA', background: '#FAF5FF', borderColor: '#E9D5FF' }),  // 재진
   }
   return (
-    <div style={{ border: '1px solid #EFEFEF', borderLeft: `5px solid ${sc.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ border: '1px solid #EFEFEF', borderRadius: 10, padding: '10px 12px', marginTop: 8, background: '#FCFCFC', display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* 1줄: 이름(한국식 + 로마자 옆) / 생년월일·성별(라벨)  +  상태 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, lineHeight: 1.4 }}>
@@ -1108,6 +1110,18 @@ function PersonDetail({ label, p, showStatus, displayStatus, expanded }: { label
 function StatusBadge({ status }: { status: string }) {
   const c = STATUS_COLOR[status] ?? STATUS_COLOR.pending
   return <span style={{ padding: '3px 10px', borderRadius: 10, background: c.bg, color: c.fg, fontSize: 12, fontWeight: 700 }}>{STATUS_KO[status] ?? status}</span>
+}
+
+function CountBubble({ count, active }: { count: number; active?: boolean }) {
+  return (
+    <span style={{
+      minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999, boxSizing: 'border-box',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: '#fff', color: active ? '#008C6A' : '#555',
+      fontSize: 11.5, fontWeight: 900, lineHeight: 1,
+      border: active ? 'none' : '1px solid #E5E7EB',
+    }}>{count}</span>
+  )
 }
 
 function MobileBookingCard({ booking, onOpen }: { booking: Booking; onOpen: () => void }) {
