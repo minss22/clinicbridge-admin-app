@@ -798,13 +798,15 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {TOP_TABS.map(t => {
                   const active = tab === t.key
+                  const important = t.key === 'action'
                   const count = counts?.[t.key] ?? 0
                   return (
                     <button key={t.key} onClick={() => { setTopTab(t.key); setMobileMenuOpen(false) }} style={{
-                      minHeight: 44, borderRadius: 10, border: `1px solid ${active ? '#008C6A' : '#E5E7EB'}`,
-                      background: active ? '#008C6A' : '#fff', color: active ? '#fff' : '#333',
+                      minHeight: 44, borderRadius: 10, border: `1px solid ${active ? '#007F61' : important ? '#B7E4D5' : '#E5E7EB'}`,
+                      background: active ? '#008C6A' : important ? '#F0FBF7' : '#fff', color: active ? '#fff' : important ? '#007F61' : '#333',
                       padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                      fontSize: 14, fontWeight: important ? 900 : 800, cursor: 'pointer',
+                      boxShadow: active && important ? '0 6px 14px rgba(0, 140, 106, 0.22)' : 'none',
                     }}>
                       <span>{t.label}</span>
                       <CountBubble count={count} active={active} />
@@ -927,21 +929,24 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
             {TOP_TABS.map((t, i) => {
               const count = counts?.[t.key] ?? 0
               const active = tab === t.key
+              const important = t.key === 'action'
               return (
                 <button key={t.key} onClick={() => setTopTab(t.key)} style={{
-                  height: 46,
-                  minWidth: 128,
+                  height: active && important ? 50 : 46,
+                  minWidth: important ? 144 : 128,
                   padding: '0 22px',
-                  border: '1px solid #E5E7EB',
+                  border: `1px solid ${active ? '#008C6A' : important ? '#B7E4D5' : '#E5E7EB'}`,
                   borderBottom: active ? '1px solid #008C6A' : 'none',
                   borderRadius: '10px 10px 0 0',
                   marginLeft: i === 0 ? 0 : -1,
-                  background: active ? '#008C6A' : '#fff',
-                  color: active ? '#fff' : '#333',
+                  background: active ? '#008C6A' : important ? '#F0FBF7' : '#fff',
+                  color: active ? '#fff' : important ? '#007F61' : '#333',
                   fontSize: 14,
-                  fontWeight: active ? 800 : 700,
+                  fontWeight: active || important ? 900 : 700,
                   cursor: 'pointer',
-                  boxShadow: active ? '0 -1px 0 rgba(0,0,0,0.02)' : 'none',
+                  boxShadow: active && important ? '0 -7px 18px rgba(0, 140, 106, 0.18)' : active ? '0 -1px 0 rgba(0,0,0,0.02)' : 'none',
+                  position: 'relative',
+                  zIndex: active ? 2 : important ? 1 : 0,
                 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                     {t.label}
