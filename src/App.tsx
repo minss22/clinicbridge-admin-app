@@ -150,7 +150,7 @@ function AdminShell({ session, openId }: { session: Session | null; openId?: str
 
   if (isMobile) return (
     <div style={{ minHeight: '100dvh', fontFamily: 'system-ui, sans-serif', background: '#F7F8FA' }}>
-      <ReservationsView isBranch={isBranch} openId={openId} mobileMode />
+      <ReservationsView isBranch={isBranch} openId={openId} mobileMode session={session} />
     </div>
   )
 
@@ -173,7 +173,7 @@ function AdminShell({ session, openId }: { session: Session | null; openId?: str
       </aside>
       <main style={{ flex: 1, minWidth: 0, padding: '0 20px 60px', background: '#F7F8FA' }}>
         <div style={{ maxWidth: (view === 'reservations' || view === 'customers') ? '100%' : 760, margin: '0 auto' }}>
-          {view === 'reservations' && <ReservationsView isBranch={isBranch} openId={openId} />}
+          {view === 'reservations' && <ReservationsView isBranch={isBranch} openId={openId} session={session} />}
           {view === 'branches' && <BranchesView isBranch={isBranch} />}
           {view === 'customers' && <CustomersView isBranch={isBranch} />}
           {view === 'admins' && me?.role === 'super' && <AdminsView myEmail={session?.user.email ?? undefined} />}
@@ -591,7 +591,7 @@ function RangeCalendar({ from, to, onChange, dateField, onDateField }: {
   )
 }
 
-function ReservationsView({ isBranch, openId, mobileMode = false }: { isBranch?: boolean; openId?: string; mobileMode?: boolean }) {
+function ReservationsView({ isBranch, openId, mobileMode = false, session }: { isBranch?: boolean; openId?: string; mobileMode?: boolean; session?: Session | null }) {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState('')
   const [items, setItems] = useState<Booking[]>([])
@@ -811,7 +811,16 @@ function ReservationsView({ isBranch, openId, mobileMode = false }: { isBranch?:
                   )
                 })}
               </div>
-              <div style={{ marginTop: 'auto', fontSize: 11.5, color: '#AAA', lineHeight: 1.5 }}>모바일에서는 상태별 간단 목록을 보여줍니다.</div>
+              <div style={{ marginTop: 'auto', borderTop: '1px solid #F0F0F0', paddingTop: 14 }}>
+                <InstallAppButton />
+                <NotifyButton />
+                <div style={{ wordBreak: 'break-all', margin: '2px 0 8px', fontSize: 11.5, color: '#999', lineHeight: 1.45 }}>{session?.user.email ?? '개발 모드'}</div>
+                {session ? (
+                  <button onClick={() => supabase.auth.signOut()} style={{ ...logoutBtn, width: '100%', padding: '8px 10px', fontSize: 12.5 }}>로그아웃</button>
+                ) : (
+                  <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })} style={{ ...logoutBtn, width: '100%', padding: '8px 10px', fontSize: 12.5 }}>로그인</button>
+                )}
+              </div>
             </aside>
           </div>
         )}
