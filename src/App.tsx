@@ -191,7 +191,7 @@ function InstallAppButton() {
   const onClick = async () => {
     if (installed) return
     if (!deferredInstallPrompt) {
-      alert('현재 브라우저에서는 자동 설치 창을 바로 열 수 없습니다. 주소창 또는 브라우저 메뉴의 "앱 설치"를 사용해 주세요.')
+      alert('앱이 이미 설치되어 있거나, 현재 브라우저에서 자동 설치 창을 열 수 없는 상태입니다.\n\n이미 설치했다면 Windows 시작 메뉴 또는 브라우저의 앱 목록에서 확인해 주세요.\n아직 설치 전이라면 Chrome/Edge 주소창 또는 브라우저 메뉴의 "앱 설치"를 사용해 주세요.')
       return
     }
     await deferredInstallPrompt.prompt()
