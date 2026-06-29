@@ -604,6 +604,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false }: { isBranch?:
   const [rejectMsg, setRejectMsg] = useState('')
   const [proposeTarget, setProposeTarget] = useState<Booking | null>(null)   // 시간 제안 모달
   const [drawerTarget, setDrawerTarget] = useState<Booking | null>(null)     // 예약 상세 드로어
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [query, setQuery] = useState('')      // 이름 검색(입력값)
   const [debouncedQuery, setDebouncedQuery] = useState('')    // 디바운스된 검색어(서버 전송)
   const [from, setFrom] = useState(thisMonthRange()[0])   // 날짜 범위 시작 (기본=이번 달 1일, 빈값=제한없음)
@@ -630,8 +631,8 @@ function ReservationsView({ isBranch, openId, mobileMode = false }: { isBranch?:
 
   const reqBody = () => ({
     branchId: branchId || undefined,
-    status: mobileMode ? 'action' : tab,
-    statusFilters: mobileMode ? TOP_TABS[0].details : detailFilters,
+    status: tab,
+    statusFilters: detailFilters,
     q: mobileMode ? undefined : debouncedQuery || undefined,
     dateField: mobileMode ? 'created' : dateField,
     from: mobileMode ? undefined : from || undefined,
@@ -779,12 +780,41 @@ function ReservationsView({ isBranch, openId, mobileMode = false }: { isBranch?:
     return (
       <div style={{ minHeight: '100dvh', padding: '14px 12px 80px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <button onClick={() => setMobileMenuOpen(true)} title="상태 메뉴" style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #DDD', background: '#fff', fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>☰</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 20, fontWeight: 900, color: '#111' }}>처리 필요</div>
-            <div style={{ marginTop: 2, fontSize: 12.5, color: '#777' }}>확정, 거절, 시간조정이 필요한 예약</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#111' }}>{currentTop.label}</div>
+            <div style={{ marginTop: 2, fontSize: 12.5, color: '#777' }}>{tab === 'action' ? '확정, 거절, 시간조정이 필요한 예약' : '상태별 예약 목록'}</div>
           </div>
           <button onClick={() => refresh()} title="새로고침" style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #DDD', background: '#fff', fontSize: 17, cursor: 'pointer' }}>↻</button>
         </div>
+        {mobileMenuOpen && (
+          <div onClick={() => setMobileMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 80, display: 'flex', justifyContent: 'flex-start' }}>
+            <aside onClick={e => e.stopPropagation()} style={{ width: 'min(280px, 82vw)', height: '100dvh', background: '#fff', boxShadow: '4px 0 20px rgba(0,0,0,0.12)', padding: 16, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 17, fontWeight: 900, color: '#111' }}>상태</div>
+                <button onClick={() => setMobileMenuOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 24, color: '#888', cursor: 'pointer' }}>×</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {TOP_TABS.map(t => {
+                  const active = tab === t.key
+                  const count = counts?.[t.key] ?? 0
+                  return (
+                    <button key={t.key} onClick={() => { setTopTab(t.key); setMobileMenuOpen(false) }} style={{
+                      minHeight: 44, borderRadius: 10, border: `1px solid ${active ? '#008C6A' : '#E5E7EB'}`,
+                      background: active ? '#008C6A' : '#fff', color: active ? '#fff' : '#333',
+                      padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      fontSize: 14, fontWeight: 800, cursor: 'pointer',
+                    }}>
+                      <span>{t.label}</span>
+                      <span style={{ minWidth: 24, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 7px', boxSizing: 'border-box', background: active ? 'rgba(255,255,255,0.18)' : '#F3F4F6', color: active ? '#fff' : '#777', fontSize: 12 }}>{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ marginTop: 'auto', fontSize: 11.5, color: '#AAA', lineHeight: 1.5 }}>모바일에서는 상태별 간단 목록을 보여줍니다.</div>
+            </aside>
+          </div>
+        )}
         {!isBranch && (
           <select value={branchId} onChange={e => setBranchId(e.target.value)} style={{ width: '100%', height: 40, marginBottom: 10, boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, border: '1px solid #DDD', background: '#fff', fontSize: 14 }}>
             <option value="">전체 병원</option>
@@ -792,8 +822,9 @@ function ReservationsView({ isBranch, openId, mobileMode = false }: { isBranch?:
           </select>
         )}
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-          {TOP_TABS[0].details.map(k => {
-            const c = STATUS_COLOR[k === 'new' ? 'pending' : k === 'reschedule' ? 'reschedule_req' : k] ?? STATUS_COLOR.pending
+          {currentTop.details.map(k => {
+            const statusKey = k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k
+            const c = STATUS_COLOR[statusKey] ?? STATUS_COLOR.pending
             return (
               <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 8px', borderRadius: 999, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 800 }}>
                 {DETAIL_LABEL[k]} <b>{counts?.[k] ?? 0}</b>
