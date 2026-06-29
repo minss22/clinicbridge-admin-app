@@ -301,7 +301,7 @@ type SortKey = 'createdAt' | 'dateTime' | 'branchName' | 'bookerName' | 'birthDa
 type SortDir = 'asc' | 'desc'
 const TOP_TABS: { key: TopTab; label: string; details: DetailStatus[] }[] = [
   { key: 'action', label: '처리 필요', details: ['new', 'companion_add', 'reschedule'] },
-  { key: 'proposed', label: '시간 조정 중', details: ['proposed'] },
+  { key: 'proposed', label: '조정 중', details: ['proposed'] },
   { key: 'confirmed', label: '확정', details: ['confirmed'] },
   { key: 'rejected', label: '거절', details: ['rejected'] },
   { key: 'cancelled', label: '취소', details: ['cancelled'] },
@@ -806,7 +806,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                       background: active ? '#008C6A' : important ? '#F0FBF7' : '#fff', color: active ? '#fff' : important ? '#007F61' : '#333',
                       padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       fontSize: 14, fontWeight: important ? 900 : 800, cursor: 'pointer',
-                      boxShadow: active && important ? '0 6px 14px rgba(0, 140, 106, 0.22)' : 'none',
+                      boxShadow: 'none',
                     }}>
                       <span>{t.label}</span>
                       <CountBubble count={count} active={active} />
@@ -932,7 +932,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
               const important = t.key === 'action'
               return (
                 <button key={t.key} onClick={() => setTopTab(t.key)} style={{
-                  height: active && important ? 50 : 46,
+                  height: 46,
                   minWidth: important ? 144 : 128,
                   padding: '0 22px',
                   border: `1px solid ${active ? '#008C6A' : important ? '#B7E4D5' : '#E5E7EB'}`,
@@ -944,7 +944,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                   fontSize: 14,
                   fontWeight: active || important ? 900 : 700,
                   cursor: 'pointer',
-                  boxShadow: active && important ? '0 -7px 18px rgba(0, 140, 106, 0.18)' : active ? '0 -1px 0 rgba(0,0,0,0.02)' : 'none',
+                  boxShadow: active ? '0 -1px 0 rgba(0,0,0,0.02)' : 'none',
                   position: 'relative',
                   zIndex: active ? 2 : important ? 1 : 0,
                 }}>
