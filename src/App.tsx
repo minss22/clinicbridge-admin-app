@@ -733,19 +733,15 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
 
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
   const currentTop = TOP_TABS.find(t => t.key === tab) ?? TOP_TABS[0]
+  const detailAllActive = currentTop.details.every(k => detailFilters.includes(k)) && detailFilters.length === currentTop.details.length
   const setTopTab = (next: TopTab) => {
     const found = TOP_TABS.find(t => t.key === next) ?? TOP_TABS[0]
     setTab(found.key)
     setDetailFilters(found.details)
     setPage(1)
   }
-  const toggleDetail = (key: DetailStatus) => {
-    setDetailFilters(prev => {
-      const allowed = currentTop.details
-      const next = prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]
-      const cleaned = next.filter(x => allowed.includes(x))
-      return cleaned.length ? cleaned : [key]
-    })
+  const selectDetail = (key: DetailStatus | 'all') => {
+    setDetailFilters(key === 'all' ? currentTop.details : [key])
     setPage(1)
   }
   const applyRange = (range: [string, string]) => { setFrom(range[0]); setTo(range[1]); setPage(1) }
@@ -802,7 +798,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                   const count = counts?.[t.key] ?? 0
                   return (
                     <button key={t.key} onClick={() => { setTopTab(t.key); setMobileMenuOpen(false) }} style={{
-                      minHeight: 44, borderRadius: 10, border: `1px solid ${active ? '#007F61' : important ? '#B7E4D5' : '#E5E7EB'}`,
+                      minHeight: active ? 44 : 38, borderRadius: 10, border: `1px solid ${active ? '#007F61' : important ? '#B7E4D5' : '#E5E7EB'}`,
                       background: active ? '#008C6A' : important ? '#F0FBF7' : '#fff', color: active ? '#fff' : important ? '#007F61' : '#333',
                       padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       fontSize: 14, fontWeight: important ? 900 : 800, cursor: 'pointer',
@@ -834,13 +830,27 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
           </select>
         )}
         {tab === 'action' && <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          <button onClick={() => selectDetail('all')} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 9px', borderRadius: 999,
+            border: `1px solid ${detailAllActive ? '#0AA877' : '#E5E7EB'}`,
+            background: detailAllActive ? '#E8F7F0' : '#fff', color: detailAllActive ? '#007F61' : '#555',
+            fontSize: 11, fontWeight: 800, cursor: 'pointer',
+          }}>
+            전체 <b>{counts?.action ?? 0}</b>
+          </button>
           {currentTop.details.map(k => {
+            const active = detailFilters.length === 1 && detailFilters[0] === k
             const statusKey = k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k
             const c = STATUS_COLOR[statusKey] ?? STATUS_COLOR.pending
             return (
-              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 8px', borderRadius: 999, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 800 }}>
+              <button key={k} onClick={() => selectDetail(k)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 9px', borderRadius: 999,
+                border: `1px solid ${active ? c.border : '#E5E7EB'}`,
+                background: active ? c.bg : '#fff', color: active ? c.fg : '#555',
+                fontSize: 11, fontWeight: 800, cursor: 'pointer',
+              }}>
                 {DETAIL_LABEL[k]} <b>{counts?.[k] ?? 0}</b>
-              </span>
+              </button>
             )
           })}
         </div>}
@@ -932,7 +942,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
               const important = t.key === 'action'
               return (
                 <button key={t.key} onClick={() => setTopTab(t.key)} style={{
-                  height: 46,
+                  height: active ? 46 : 40,
                   minWidth: important ? 144 : 128,
                   padding: '0 22px',
                   border: `1px solid ${active ? '#008C6A' : important ? '#B7E4D5' : '#E5E7EB'}`,
@@ -957,12 +967,25 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
             })}
           </div>
           {tab === 'action' && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 0 10px', marginBottom: 2 }}>
+            <button onClick={() => selectDetail('all')} style={{
+              height: 26, padding: '0 8px 0 10px', borderRadius: 999, border: `1px solid ${detailAllActive ? '#0AA877' : '#E5E7EB'}`,
+              background: detailAllActive ? '#E8F7F0' : '#fff', color: detailAllActive ? '#007F61' : '#555',
+              fontSize: 11.5, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              전체
+              <span style={{
+                minWidth: 18, height: 18, padding: '0 4px', borderRadius: 999, boxSizing: 'border-box',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: detailAllActive ? '#fff' : '#F3F4F6', color: detailAllActive ? '#007F61' : '#777',
+                fontSize: 10.5, fontWeight: 900, lineHeight: 1,
+              }}>{counts?.action ?? 0}</span>
+            </button>
             {currentTop.details.map(k => {
-              const active = detailFilters.includes(k)
+              const active = detailFilters.length === 1 && detailFilters[0] === k
               const count = counts?.[k] ?? 0
               const c = STATUS_COLOR[k === 'new' ? 'pending' : k === 'proposed' ? 'rescheduling' : k === 'reschedule' ? 'reschedule_req' : k] ?? STATUS_COLOR.pending
               return (
-                <button key={k} onClick={() => toggleDetail(k)} style={{
+                <button key={k} onClick={() => selectDetail(k)} style={{
                   height: 26, padding: '0 8px 0 10px', borderRadius: 999, border: `1px solid ${active ? c.border : '#E5E7EB'}`,
                   background: active ? c.bg : '#fff', color: active ? c.fg : '#555',
                   fontSize: 11.5, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
