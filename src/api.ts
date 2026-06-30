@@ -65,7 +65,7 @@ export type AdminBranch = {
   openTime: string; closeTime: string; lunchStart: string; lunchEnd: string
   closedDays: number[]; noLunchDays: number[]; holidayDates: string[]
   closeBufferMin: number; lunchBufferMin: number; blockedSlots: string[]
-  lineNotifyId: string; channelAccessToken: string
+  channelAccessToken: string
 }
 export type Customer = {
   lineUserId: string; name: string; nameKo: string; displayName: string

@@ -1548,7 +1548,7 @@ const emptyBranch = (): AdminBranch => ({
   branchId: '', name: '', nameJa: '', address: '', addressJa: '',
   openTime: '', closeTime: '', lunchStart: '', lunchEnd: '',
   closedDays: [], noLunchDays: [], holidayDates: [], closeBufferMin: 90, lunchBufferMin: 90, blockedSlots: [],
-  lineNotifyId: '', channelAccessToken: '',
+  channelAccessToken: '',
 })
 // 폼 값으로 특정 날짜의 시간 슬롯 계산 (백엔드 computeSlots와 동일 규칙)
 const toMinC = (t?: string) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m }
@@ -1852,10 +1852,8 @@ function BranchForm({ init, isNew, canDelete, isBranch, onClose, onSaved }: { in
       </div>
       <div style={{ fontSize: 11.5, color: '#888', marginTop: 4 }}>마감 {b.closeBufferMin || 0}분 · 점심 시작 {b.lunchBufferMin || 0}분 전까지 예약 가능 (기본 90 = 1시간 30분)</div>
       <div style={{ fontSize: 11.5, color: '#1D9E75', marginTop: 10 }}>※ 휴무 요일·휴무일·마감 시간은 병원 상세 페이지에서 바로 설정할 수 있습니다.</div>
-      {/* 매니저 LINE ID·채널 토큰은 슈퍼 관리자만 (병원 관리자에겐 숨김) */}
+      {/* 채널 토큰은 슈퍼 관리자만 (고객 LINE 알림용, 병원 관리자에겐 숨김) */}
       {!isBranch && <>
-        <Lbl>매니저 LINE ID <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>예약 알림을 받을 LINE userId</span></Lbl>
-        <Txt value={b.lineNotifyId} onChange={v => set('lineNotifyId', v)} />
         <Lbl>채널 액세스 토큰 <span style={{ fontWeight: 400, color: '#1D9E75', fontSize: 11.5, marginLeft: 6 }}>이 병원 LINE 공식계정의 Messaging API 토큰</span></Lbl>
         <Txt value={b.channelAccessToken} onChange={v => set('channelAccessToken', v)} placeholder="비우면 전역 토큰 사용" />
       </>}
