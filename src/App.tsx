@@ -1419,7 +1419,7 @@ function CalendarView({ bookings, branches, branchId, month, onMonthChange, onOp
   for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
   const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); onMonthChange(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
   const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
-  const visibleBranches = branchId ? branches.filter(b => b.branchId === branchId) : branches
+  const selectedBranch = branchId ? branches.find(b => b.branchId === branchId) : branches.length === 1 ? branches[0] : null
   const branchClosedOn = (b: AdminBranch, date: string) => {
     const dow = new Date(date + 'T00:00:00Z').getUTCDay()
     return (b.closedDays ?? []).includes(dow) || (b.holidayDates ?? []).includes(date)
@@ -1450,24 +1450,22 @@ function CalendarView({ bookings, branches, branchId, month, onMonthChange, onOp
           const counts: Record<string, number> = {}
           for (const b of list) { const s = bookerDisplayStatus(b); counts[s] = (counts[s] || 0) + 1 }
           const isToday = ds === todayStr
-          const closedCount = visibleBranches.filter(b => branchClosedOn(b, ds)).length
-          const isClosed = visibleBranches.length > 0 && closedCount === visibleBranches.length
-          const isPartlyClosed = visibleBranches.length > 1 && closedCount > 0 && closedCount < visibleBranches.length
+          const isClosed = !!selectedBranch && branchClosedOn(selectedBranch, ds)
           return (
             <button key={i} type="button" onClick={() => list.length && onOpenDay(ds, list)} style={{
               minHeight: 84, borderRadius: 8, padding: '6px 6px', textAlign: 'left', cursor: list.length ? 'pointer' : 'default',
-              border: `1.5px solid ${isToday ? '#1D9E75' : isClosed ? '#FCA5A5' : isPartlyClosed ? '#FDBA74' : '#EEE'}`,
-              background: isClosed ? '#FFF1F2' : isPartlyClosed ? '#FFF7ED' : '#fff',
+              border: `1.5px solid ${isToday ? '#1D9E75' : isClosed ? '#FCA5A5' : '#EEE'}`,
+              background: isClosed ? '#FFF1F2' : '#fff',
               display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: isClosed ? '#991B1B' : isPartlyClosed ? '#9A3412' : '#333' }}>{Number(ds.slice(8))}</span>
-                {(isClosed || isPartlyClosed) && (
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: isClosed ? '#991B1B' : '#333' }}>{Number(ds.slice(8))}</span>
+                {isClosed && (
                   <span style={{
                     flexShrink: 0, maxWidth: '70%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    fontSize: 10.5, fontWeight: 800, color: isClosed ? '#991B1B' : '#9A3412',
-                    background: isClosed ? '#FEE2E2' : '#FFEDD5', borderRadius: 5, padding: '1px 5px',
-                  }}>{isClosed ? '휴무' : '일부 휴무'}</span>
+                    fontSize: 10.5, fontWeight: 800, color: '#991B1B',
+                    background: '#FEE2E2', borderRadius: 5, padding: '1px 5px',
+                  }}>휴무</span>
                 )}
               </div>
               {Object.entries(counts).map(([s, n]) => {
@@ -1478,10 +1476,9 @@ function CalendarView({ bookings, branches, branchId, month, onMonthChange, onOp
           )
         })}
       </div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 10, fontSize: 12, color: '#777' }}>
+      {selectedBranch && <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 10, fontSize: 12, color: '#777' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i style={{ width: 12, height: 12, borderRadius: 4, background: '#FFF1F2', border: '1px solid #FCA5A5' }} />휴무</span>
-        {!branchId && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i style={{ width: 12, height: 12, borderRadius: 4, background: '#FFF7ED', border: '1px solid #FDBA74' }} />일부 휴무</span>}
-      </div>
+      </div>}
     </div>
   )
 }
