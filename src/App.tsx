@@ -948,7 +948,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                   border: `1px solid ${active ? '#008C6A' : important ? '#B7E4D5' : '#E5E7EB'}`,
                   borderBottom: active ? '1px solid #008C6A' : 'none',
                   borderRadius: '10px 10px 0 0',
-                  marginLeft: i === 0 ? 0 : -1,
+                  marginLeft: t.key === 'all' ? 'auto' : i === 0 ? 0 : -1,
                   background: active ? '#008C6A' : important ? '#F0FBF7' : '#fff',
                   color: active ? '#fff' : important ? '#007F61' : '#333',
                   fontSize: 14,
