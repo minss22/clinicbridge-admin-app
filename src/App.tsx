@@ -622,6 +622,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
   const [dayDrawer, setDayDrawer] = useState<{ date: string; bookings: Booking[] } | null>(null)
   const [calMonth, setCalMonth] = useState(thisMonthRange()[0].slice(0, 7))   // 캘린더 표시 월(YYYY-MM)
   const [calBookings, setCalBookings] = useState<Booking[]>([])               // 그 달 예약(캘린더 전용)
+  const [calBranches, setCalBranches] = useState<AdminBranch[]>([])
 
   const reqRef = useRef(0)            // 최신 요청 식별 → 오래된 응답 무시
 
@@ -670,6 +671,10 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
     if (viewMode !== 'calendar') return
     adminApi.getReservationsMonth(calMonth, branchId || undefined).then(setCalBookings).catch(() => setCalBookings([]))
   }, [viewMode, calMonth, branchId])
+  useEffect(() => {
+    if (viewMode !== 'calendar' || calBranches.length) return
+    adminApi.getAdminBranches().then(setCalBranches).catch(() => setCalBranches([]))
+  }, [viewMode, calBranches.length])
 
   const refresh = (silent = false) => {
     if (viewMode === 'list') fetchFirst(silent)
@@ -733,6 +738,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
 
   const tInput: React.CSSProperties = { height: 38, width: 112, boxSizing: 'border-box', padding: '0 8px', borderRadius: 8, border: '1px solid #DDD', fontSize: 13 }
   const currentTop = TOP_TABS.find(t => t.key === tab) ?? TOP_TABS[0]
+  const hasUnchecked = (counts?.action ?? 0) > 0
   const detailAllActive = currentTop.details.every(k => detailFilters.includes(k)) && detailFilters.length === currentTop.details.length
   const setTopTab = (next: TopTab) => {
     const found = TOP_TABS.find(t => t.key === next) ?? TOP_TABS[0]
@@ -777,7 +783,10 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
     return (
       <div style={{ minHeight: '100dvh', padding: '14px 12px 80px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <button onClick={() => setMobileMenuOpen(true)} title="상태 메뉴" style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #DDD', background: '#fff', fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>☰</button>
+          <button onClick={() => setMobileMenuOpen(true)} title="상태 메뉴" style={{ position: 'relative', width: 40, height: 40, borderRadius: 10, border: '1px solid #DDD', background: '#fff', fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>
+            ☰
+            {hasUnchecked && <span aria-hidden style={{ position: 'absolute', top: 7, right: 7, width: 8, height: 8, borderRadius: 999, background: '#E53E3E', boxShadow: '0 0 0 2px #fff' }} />}
+          </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 20, fontWeight: 900, color: '#111' }}>{currentTop.label}</div>
             <div style={{ marginTop: 2, fontSize: 12.5, color: '#777' }}>{tab === 'action' ? '확정, 거절, 시간조정이 필요한 예약' : '상태별 예약 목록'}</div>
@@ -803,7 +812,9 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                       padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       fontSize: 14, fontWeight: important ? 900 : 800, cursor: 'pointer',
                       boxShadow: 'none',
+                      position: 'relative',
                     }}>
+                      {important && hasUnchecked && <span aria-hidden style={{ position: 'absolute', top: 8, left: 8, width: 8, height: 8, borderRadius: 999, background: '#E53E3E', boxShadow: `0 0 0 2px ${active ? '#008C6A' : important ? '#F0FBF7' : '#fff'}` }} />}
                       <span>{t.label}</span>
                       <CountBubble count={count} active={active} />
                     </button>
@@ -903,7 +914,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
       </div>
 
       {viewMode === 'calendar' ? (
-        <CalendarView bookings={calBookings} month={calMonth} onMonthChange={setCalMonth} onOpenDay={(date, list) => setDayDrawer({ date, bookings: list })} />
+        <CalendarView bookings={calBookings} branches={calBranches} branchId={branchId} month={calMonth} onMonthChange={setCalMonth} onOpenDay={(date, list) => setDayDrawer({ date, bookings: list })} />
       ) : (
         <>
           {/* 검색: 날짜 범위 · 시간 범위 · 이름 */}
@@ -958,6 +969,7 @@ function ReservationsView({ isBranch, openId, mobileMode = false, session }: { i
                   position: 'relative',
                   zIndex: active ? 2 : important ? 1 : 0,
                 }}>
+                  {important && hasUnchecked && <span aria-hidden style={{ position: 'absolute', top: -5, right: 14, width: 9, height: 9, borderRadius: 999, background: '#E53E3E', boxShadow: '0 0 0 2px #fff' }} />}
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                     {t.label}
                     <CountBubble count={count} active={active} />
@@ -1397,7 +1409,7 @@ function Pagination({ page, totalPages, total, pageSize, onPage, onPageSize }: {
 const STATUS_SHORT: Record<string, string> = { pending: '접수', confirmed: '확정', rejected: '거절', cancelled: '취소', completed: '완료', reschedule_req: '변경', rescheduling: '조정' }
 
 // 예약 관리 — 캘린더 뷰 (예약일 기준, 날짜별 상태 건수)
-function CalendarView({ bookings, month, onMonthChange, onOpenDay }: { bookings: Booking[]; month: string; onMonthChange: (m: string) => void; onOpenDay: (date: string, list: Booking[]) => void }) {
+function CalendarView({ bookings, branches, branchId, month, onMonthChange, onOpenDay }: { bookings: Booking[]; branches: AdminBranch[]; branchId: string; month: string; onMonthChange: (m: string) => void; onOpenDay: (date: string, list: Booking[]) => void }) {
   const ym = month
   const [y, m] = ym.split('-').map(Number)
   const startDow = new Date(y, m - 1, 1).getDay()
@@ -1407,6 +1419,11 @@ function CalendarView({ bookings, month, onMonthChange, onOpenDay }: { bookings:
   for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
   const shift = (delta: number) => { const nd = new Date(y, m - 1 + delta, 1); onMonthChange(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`) }
   const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  const visibleBranches = branchId ? branches.filter(b => b.branchId === branchId) : branches
+  const branchClosedOn = (b: AdminBranch, date: string) => {
+    const dow = new Date(date + 'T00:00:00Z').getUTCDay()
+    return (b.closedDays ?? []).includes(dow) || (b.holidayDates ?? []).includes(date)
+  }
 
   // 날짜 → 예약(예약일 기준), 취소·거절 제외하고 표시
   const byDate: Record<string, Booking[]> = {}
@@ -1433,12 +1450,26 @@ function CalendarView({ bookings, month, onMonthChange, onOpenDay }: { bookings:
           const counts: Record<string, number> = {}
           for (const b of list) { const s = bookerDisplayStatus(b); counts[s] = (counts[s] || 0) + 1 }
           const isToday = ds === todayStr
+          const closedCount = visibleBranches.filter(b => branchClosedOn(b, ds)).length
+          const isClosed = visibleBranches.length > 0 && closedCount === visibleBranches.length
+          const isPartlyClosed = visibleBranches.length > 1 && closedCount > 0 && closedCount < visibleBranches.length
           return (
             <button key={i} type="button" onClick={() => list.length && onOpenDay(ds, list)} style={{
               minHeight: 84, borderRadius: 8, padding: '6px 6px', textAlign: 'left', cursor: list.length ? 'pointer' : 'default',
-              border: `1.5px solid ${isToday ? '#1D9E75' : '#EEE'}`, background: '#fff', display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden',
+              border: `1.5px solid ${isToday ? '#1D9E75' : isClosed ? '#FCA5A5' : isPartlyClosed ? '#FDBA74' : '#EEE'}`,
+              background: isClosed ? '#FFF1F2' : isPartlyClosed ? '#FFF7ED' : '#fff',
+              display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden',
             }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#333' }}>{Number(ds.slice(8))}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: isClosed ? '#991B1B' : isPartlyClosed ? '#9A3412' : '#333' }}>{Number(ds.slice(8))}</span>
+                {(isClosed || isPartlyClosed) && (
+                  <span style={{
+                    flexShrink: 0, maxWidth: '70%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontSize: 10.5, fontWeight: 800, color: isClosed ? '#991B1B' : '#9A3412',
+                    background: isClosed ? '#FEE2E2' : '#FFEDD5', borderRadius: 5, padding: '1px 5px',
+                  }}>{isClosed ? '휴무' : '일부 휴무'}</span>
+                )}
+              </div>
               {Object.entries(counts).map(([s, n]) => {
                 const c = STATUS_COLOR[s] ?? STATUS_COLOR.pending
                 return <span key={s} style={{ fontSize: 10.5, fontWeight: 700, color: c.fg, background: c.bg, borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap' }}>{STATUS_SHORT[s] ?? s} {n}</span>
@@ -1446,6 +1477,10 @@ function CalendarView({ bookings, month, onMonthChange, onOpenDay }: { bookings:
             </button>
           )
         })}
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 10, fontSize: 12, color: '#777' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i style={{ width: 12, height: 12, borderRadius: 4, background: '#FFF1F2', border: '1px solid #FCA5A5' }} />휴무</span>
+        {!branchId && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><i style={{ width: 12, height: 12, borderRadius: 4, background: '#FFF7ED', border: '1px solid #FDBA74' }} />일부 휴무</span>}
       </div>
     </div>
   )
